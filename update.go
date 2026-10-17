@@ -34,16 +34,21 @@ type Manifest struct {
 	SHA256  string `json:"sha256"`
 }
 
-var errUpdatesNotConfigured = errors.New("this build has no update source; set updateURL in config.json")
+var errUpdatesNotConfigured = errors.New("no update URL set; add one in Settings")
+
+// defaultUpdateURL is latest.json on this build's GitHub releases.
+func defaultUpdateURL() (string, error) {
+	if updateRepo == "" {
+		return "", errUpdatesNotConfigured
+	}
+	return "https://github.com/" + updateRepo + "/releases/latest/download/latest.json", nil
+}
 
 func manifestURL(cfg Config) (string, error) {
 	if cfg.UpdateURL != "" {
 		return cfg.UpdateURL, nil
 	}
-	if updateRepo == "" {
-		return "", errUpdatesNotConfigured
-	}
-	return "https://github.com/" + updateRepo + "/releases/latest/download/latest.json", nil
+	return defaultUpdateURL()
 }
 
 var httpClient = &http.Client{Timeout: 2 * time.Minute}
@@ -96,14 +101,28 @@ func applyUpdate(m *Manifest) error {
 		os.Rename(oldPath, exe) // put the running version back
 		return fmt.Errorf("install new exe: %w", err)
 	}
-	cmd := exec.Command(exe, afterUpdateFlag, strconv.Itoa(os.Getpid()))
-	if err := cmd.Start(); err != nil {
+	pid, err := relaunch()
+	if err != nil {
 		os.Rename(exe, newPath)
 		os.Rename(oldPath, exe)
 		return fmt.Errorf("start new version: %w", err)
 	}
-	log.Printf("updated %s -> %s; handing over to pid %d", version, m.Version, cmd.Process.Pid)
+	log.Printf("updated %s -> %s; handing over to pid %d", version, m.Version, pid)
 	return nil
+}
+
+// relaunch starts the exe at our path, which waits for this process to exit
+// before taking over. The caller should quit right after.
+func relaunch() (int, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return 0, err
+	}
+	cmd := exec.Command(exe, afterUpdateFlag, strconv.Itoa(os.Getpid()))
+	if err := cmd.Start(); err != nil {
+		return 0, err
+	}
+	return cmd.Process.Pid, nil
 }
 
 func download(url, path, wantSHA string) error {

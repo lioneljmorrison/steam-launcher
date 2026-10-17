@@ -30,20 +30,28 @@ type Server struct {
 	base     string
 	nfc      *NFCManager // nil when the NFC base is disabled
 	details  *DetailsStore
+	cfg      Config
+	quit     func() // exits the app (after a relaunch or update has started)
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.index)
 	mux.HandleFunc("GET /launch/{appid}", s.launch)
-	mux.HandleFunc("GET /cover/{appid}", s.cover)
-	mux.HandleFunc("GET /api/cards", s.localAPI(s.listCards))
-	mux.HandleFunc("POST /api/cards/link", s.localAPI(s.linkCard))
-	mux.HandleFunc("POST /api/cards/unlink", s.localAPI(s.unlinkCard))
-	mux.HandleFunc("POST /api/cards/cancel", s.localAPI(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /cover/{appid}", s.art)
+	mux.HandleFunc("GET /art/{appid}/{kind}", s.art)
+	mux.HandleFunc("GET /settings", s.settingsPage)
+	mux.HandleFunc("GET /api/settings", s.localAPI(s.getSettings))
+	mux.HandleFunc("POST /api/settings", s.localAPI(s.saveSettings))
+	mux.HandleFunc("POST /api/update/check", s.localAPI(s.updateCheck))
+	mux.HandleFunc("POST /api/update/install", s.localAPI(s.updateInstall))
+	mux.HandleFunc("GET /api/cards", s.localAPI(s.withNFC(s.listCards)))
+	mux.HandleFunc("POST /api/cards/link", s.localAPI(s.withNFC(s.linkCard)))
+	mux.HandleFunc("POST /api/cards/unlink", s.localAPI(s.withNFC(s.unlinkCard)))
+	mux.HandleFunc("POST /api/cards/cancel", s.localAPI(s.withNFC(func(w http.ResponseWriter, r *http.Request) {
 		s.nfc.CancelPending()
 		s.listCards(w, r)
-	}))
+	})))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		result(w, http.StatusNotFound, "Not found", "")
 	})
@@ -83,17 +91,22 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) cover(w http.ResponseWriter, r *http.Request) {
+// art serves cached Steam artwork: /art/{appid}/{header|hero|logo}
+// (/cover/{appid} is the header).
+func (s *Server) art(w http.ResponseWriter, r *http.Request) {
 	if !isLoopback(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	appID := r.PathValue("appid")
-	if _, err := strconv.Atoi(appID); err != nil {
+	appID, kind := r.PathValue("appid"), r.PathValue("kind")
+	if kind == "" {
+		kind = "header"
+	}
+	if _, err := strconv.Atoi(appID); err != nil || artFiles[kind] == nil {
 		http.NotFound(w, r)
 		return
 	}
-	path, ok := coverPath(appID)
+	path, ok := artPath(appID, kind)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -102,14 +115,20 @@ func (s *Server) cover(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
-// localAPI guards the card API: this PC only, and the key in X-Key so other
-// web pages open in the browser can't call it.
+// localAPI guards the API: this PC only, and the key in X-Key so other web
+// pages open in the browser can't call it.
 func (s *Server) localAPI(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !isLoopback(r) || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Key")), []byte(s.key)) != 1 {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		h(w, r)
+	}
+}
+
+func (s *Server) withNFC(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if s.nfc == nil {
 			http.Error(w, "NFC base disabled", http.StatusNotFound)
 			return

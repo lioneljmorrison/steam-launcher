@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Launcher Settings</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #1b2838; color: #c7d5e0; margin: 0; padding: 24px; }
+  main { max-width: 640px; }
+  h1 { margin: 0 0 4px; color: #fff; }
+  a { color: #66c0f4; }
+  p.sub { margin: 0 0 24px; opacity: .7; font-size: 14px; }
+  fieldset { border: 1px solid #2a475e; border-radius: 10px; padding: 16px 18px 6px; margin: 0 0 18px; }
+  legend { color: #fff; font-weight: 600; padding: 0 6px; }
+  label { display: block; margin: 0 0 14px; font-size: 14px; }
+  label > span { display: block; margin-bottom: 4px; color: #fff; }
+  .hint { display: block; font-size: 12px; opacity: .65; margin-top: 4px; }
+  input[type=text], input[type=number], select { width: 100%; box-sizing: border-box; font: inherit; padding: 7px 10px; border-radius: 6px; border: 1px solid #3d6c8d; background: #0f1922; color: #fff; }
+  input:focus, select:focus { outline: 2px solid #66c0f4; outline-offset: 1px; }
+  .row { display: flex; gap: 8px; }
+  .row > input { flex: 1; }
+  .check { display: flex; gap: 8px; align-items: center; }
+  button { font: inherit; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; background: #2a475e; color: #fff; white-space: nowrap; }
+  button:hover { background: #3d6c8d; }
+  button.primary { background: #4c8a2f; padding: 9px 20px; }
+  button.primary:hover { background: #5ea33a; }
+  button:disabled { opacity: .5; cursor: default; }
+  .actions { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+  .status { font-size: 14px; }
+  .status.error { color: #ff8a80; }
+  .status.ok { color: #a5d6a7; }
+  code { color: #fff; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Settings</h1>
+  <p class="sub"><a href="/">← Back to games</a> · Saved to <code id="config-path"></code></p>
+
+  <form id="form" autocomplete="off">
+    <fieldset>
+      <legend>Network</legend>
+      <label><span>Port</span>
+        <input type="number" id="port" min="1" max="65535" required>
+        <span class="hint">For the QR page and phone links. Changing it changes the links in printed QR codes.</span>
+      </label>
+      <label><span>Address in QR codes</span>
+        <input type="text" id="hostIP" placeholder="">
+        <span class="hint">Leave blank to detect this PC's LAN address automatically.</span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Bluetooth scanner</legend>
+      <label><span>Scanner</span>
+        <select id="scannerMode">
+          <option value="auto">Find Bluetooth scanners automatically</option>
+          <option value="port">Use a specific COM port</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
+      <label id="portRow"><span>COM port</span>
+        <select id="scannerPort"></select>
+      </label>
+      <label id="matchRow"><span>Scanner name pattern</span>
+        <input type="text" id="scannerMatch">
+        <span class="hint">Paired Bluetooth devices whose name matches this pattern are treated as scanners.</span>
+      </label>
+      <label><span>Baud rate</span>
+        <input type="number" id="scannerBaud" min="1">
+        <span class="hint">Only matters for USB scanners in COM mode; Bluetooth ignores it.</span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>NFC base</legend>
+      <label class="check"><input type="checkbox" id="nfcBase"> Use a Disney Infinity base for NFC cards</label>
+      <p class="hint" style="margin: -6px 0 14px">Works with bases that show up as USB device 0E6F:0129 (the Wii and PlayStation versions). The Xbox 360 base isn't compatible.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Updates</legend>
+      <label><span>Update URL</span>
+        <div class="row">
+          <input type="text" id="updateURL">
+          <button type="button" id="resetURL">Reset to default</button>
+        </div>
+        <span class="hint">Where to find <code>latest.json</code> for new versions.</span>
+      </label>
+      <div class="actions" style="margin: 0 0 14px">
+        <span>Version <code id="version"></code></span>
+        <button type="button" id="checkUpdate">Check for updates</button>
+        <button type="button" id="installUpdate" hidden>Install</button>
+        <span class="status" id="updateStatus"></span>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit" class="primary">Save and restart</button>
+      <span class="status" id="saveStatus"></span>
+    </div>
+  </form>
+</main>
+<script>
+  const KEY = {{.Key}};
+  const $ = id => document.getElementById(id);
+  let loaded = null;
+
+  async function api(path, method = "GET", body) {
+    const res = await fetch(path, {
+      method,
+      headers: { "X-Key": KEY, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(text.trim() || res.statusText);
+    return text ? JSON.parse(text) : {};
+  }
+
+  function status(el, msg, kind = "") {
+    el.textContent = msg;
+    el.className = "status " + kind;
+  }
+
+  function syncScannerRows() {
+    const mode = $("scannerMode").value;
+    $("portRow").hidden = mode !== "port";
+    $("matchRow").hidden = mode !== "auto";
+  }
+
+  async function load() {
+    loaded = await api("/api/settings");
+    const { config: c, detected, version, configPath } = loaded;
+    $("config-path").textContent = configPath;
+    $("version").textContent = version;
+    $("port").value = c.port;
+    $("hostIP").value = c.hostIP;
+    $("hostIP").placeholder = `Auto-detect (currently ${detected.hostIP})`;
+    $("scannerMatch").value = c.scannerMatch;
+    $("scannerBaud").value = c.scannerBaud;
+    $("nfcBase").checked = c.nfcBase !== "off";
+    $("updateURL").value = c.updateURL;
+
+    const sp = (c.scannerPort || "").toUpperCase();
+    $("scannerMode").value = sp === "" ? "auto" : sp === "OFF" ? "off" : "port";
+    const ports = detected.ports.slice();
+    if ($("scannerMode").value === "port" && !ports.some(p => p.port.toUpperCase() === sp)) {
+      ports.unshift({ port: sp, device: "not found right now" });
+    }
+    $("scannerPort").replaceChildren(...ports.map(p => new Option(p.device ? `${p.port} — ${p.device}` : p.port, p.port)));
+    if (!ports.length) $("scannerPort").append(new Option("No COM ports found", "", true, true));
+    if (sp && sp !== "OFF") $("scannerPort").value = sp;
+    syncScannerRows();
+  }
+
+  $("scannerMode").addEventListener("change", syncScannerRows);
+  $("resetURL").addEventListener("click", () => { $("updateURL").value = loaded.defaults.updateURL; });
+
+  // Wait for the restarted app to answer, then reload from it.
+  async function waitForRestart(port, path) {
+    const base = `${location.protocol}//${location.hostname}:${port}`;
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      try {
+        const res = await fetch(`${base}/api/settings`, { headers: { "X-Key": KEY } });
+        if (res.ok) { location.href = base + path; return; }
+      } catch {}
+    }
+    throw new Error("the launcher didn't come back; check the tray");
+  }
+
+  $("form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const mode = $("scannerMode").value;
+    const cfg = {
+      ...loaded.config,
+      port: Number($("port").value),
+      hostIP: $("hostIP").value.trim(),
+      scannerPort: mode === "auto" ? "" : mode === "off" ? "off" : $("scannerPort").value,
+      scannerBaud: Number($("scannerBaud").value),
+      scannerMatch: $("scannerMatch").value,
+      nfcBase: $("nfcBase").checked ? "" : "off",
+      updateURL: $("updateURL").value.trim(),
+    };
+    const button = e.submitter;
+    button.disabled = true;
+    try {
+      status($("saveStatus"), "Saving…");
+      const res = await api("/api/settings", "POST", cfg);
+      status($("saveStatus"), "Saved. Restarting the launcher…", "ok");
+      await waitForRestart(res.port, "/settings");
+    } catch (err) {
+      status($("saveStatus"), err.message, "error");
+      button.disabled = false;
+    }
+  });
+
+  $("checkUpdate").addEventListener("click", async () => {
+    $("installUpdate").hidden = true;
+    status($("updateStatus"), "Checking…");
+    try {
+      const r = await api("/api/update/check", "POST");
+      if (r.newer) {
+        status($("updateStatus"), `${r.latest} is available.`, "ok");
+        $("installUpdate").textContent = `Install ${r.latest}`;
+        $("installUpdate").hidden = false;
+      } else {
+        status($("updateStatus"), `You're on the latest version (${r.current}).`, "ok");
+      }
+    } catch (err) {
+      status($("updateStatus"), err.message, "error");
+    }
+  });
+
+  $("installUpdate").addEventListener("click", async () => {
+    $("installUpdate").disabled = true;
+    status($("updateStatus"), "Downloading and installing…");
+    try {
+      await api("/api/update/install", "POST");
+      status($("updateStatus"), "Installed. Restarting the launcher…", "ok");
+      await waitForRestart(loaded.config.port, "/settings");
+    } catch (err) {
+      status($("updateStatus"), err.message, "error");
+      $("installUpdate").disabled = false;
+    }
+  });
+
+  load().catch(err => status($("saveStatus"), "Couldn't load settings: " + err.message, "error"));
+</script>
+</body>
+</html>

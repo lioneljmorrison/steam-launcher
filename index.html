@@ -33,31 +33,51 @@
   button:hover { background: #3d6c8d; }
   .muted { opacity: .7; }
   header { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; }
-  header button { padding: 8px 16px; flex: none; }
+  .header-actions { display: flex; gap: 8px; flex: none; }
+  header button { padding: 8px 16px; }
 
-  /* Print: one 3 × 2 in label per game, for a thermal label printer.
-     Black only (thermal can't print colour); print at 100% scale. */
-  @page { size: 3in 2in; margin: 0; }
+  select { font: inherit; padding: 7px 10px; border-radius: 6px; border: 1px solid #3d6c8d; background: #0f1922; color: #fff; }
+
+  /* Printing builds #print-root from the template's sheet geometry (see TEMPLATES). */
+  #print-root { display: none; }
   @media print {
     html, body { background: #fff; padding: 0; margin: 0; }
-    header, .banner, .card .links { display: none !important; }
-    .grid { display: block; }
-    .card {
-      width: 3in; height: 2in; box-sizing: border-box; padding: 2.5mm;
-      border: 0; border-radius: 0; outline: none !important; color: #000;
-      display: grid; grid-template-columns: 1fr 22mm; grid-template-rows: auto auto auto 1fr;
-      grid-template-areas: "cover qr" "name name" "meta meta" "desc desc"; column-gap: 2.5mm;
-      text-align: left; break-after: page; break-inside: avoid; overflow: hidden;
-    }
-    .card:last-child { break-after: auto; }
-    .card .qr { grid-area: qr; align-self: start; }
-    .card .qr svg { width: 22mm; height: 22mm; margin: 0; }
-    .card img.cover { grid-area: cover; height: 22mm; filter: grayscale(1) contrast(1.15); }
-    .card .name { grid-area: name; padding: 1.5mm 0 0; font-size: 9pt; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .card .meta { grid-area: meta; padding: 0.4mm 0 0; font-size: 6.5pt; opacity: 1; }
-    .card .desc:not(:empty) { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
-    .card .desc { grid-area: desc; padding: 0.8mm 0 0; font-size: 6pt; line-height: 1.25; -webkit-line-clamp: 3; max-height: 3.75em; }
+    body > :not(#print-root) { display: none !important; }
+    #print-root { display: block; }
   }
+  .sheet { box-sizing: border-box; overflow: hidden; display: grid; break-after: page; }
+  .sheet:last-child { break-after: auto; }
+  .pcard {
+    box-sizing: border-box; overflow: hidden; background: #fff; color: #000; font-family: system-ui, sans-serif;
+    display: grid; grid-template-columns: 1fr 22mm; grid-template-rows: auto auto auto 1fr;
+    grid-template-areas: "cover qr" "name name" "meta meta" "desc desc"; column-gap: 2.5mm;
+  }
+  .pcard img { grid-area: cover; width: 100%; height: 22mm; object-fit: cover; display: block; }
+  .pcard .qr { grid-area: qr; }
+  .pcard .qr svg { width: 22mm; height: 22mm; display: block; }
+  .pcard .name { grid-area: name; padding: 1.5mm 0 0; font-size: 9pt; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pcard .meta { grid-area: meta; padding: 0.4mm 0 0; font-size: 6.5pt; }
+  .pcard .desc { grid-area: desc; padding: 0.8mm 0 0; font-size: 6pt; line-height: 1.25; overflow: hidden;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; max-height: 3.75em; }
+  /* Side A: full art. Side B: details and optional QR. */
+  .pcard.art { display: block; position: relative; padding: 0 !important; background: #111; }
+  .pcard.art img.hero { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  /* Bottom-left, like Steam's library: hero art leaves room for the logo there. */
+  .pcard.art img.logo { position: absolute; left: 6%; bottom: 9%; width: 62%; height: 58%; object-fit: contain; object-position: left bottom; filter: drop-shadow(0 0.5mm 1.2mm rgba(0,0,0,.6)); }
+  .pcard.art .title { position: absolute; left: 3mm; right: 3mm; bottom: 3mm; color: #fff; font-size: 11pt; font-weight: 700; text-shadow: 0 0.3mm 1.5mm #000; }
+  .pcard.back { grid-template-rows: auto auto 1fr; grid-template-areas: "name qr" "meta qr" "desc qr"; }
+  .pcard.back.noqr { grid-template-columns: 1fr; grid-template-areas: "name" "meta" "desc"; }
+  .pcard.back .name { padding-top: 0; font-size: 10pt; white-space: normal; }
+  .pcard.back .meta { padding-top: 0.8mm; }
+  .pcard.back .desc { padding-top: 1.5mm; font-size: 6.5pt; -webkit-line-clamp: 8; max-height: 10em; }
+  .sheet.cutlines .pcard { border: 0.2mm dashed #9aa; border-radius: 3.18mm; }
+  .sheet.mono img { filter: grayscale(1) contrast(1.15); }
+
+  .print-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 20px; padding: 10px 14px; border: 1px solid #2a475e; border-radius: 10px; font-size: 14px; }
+  .print-bar .title { color: #fff; font-weight: 600; }
+  .print-bar label { display: inline-flex; gap: 6px; align-items: center; }
+  .print-bar label.disabled { opacity: .45; }
+  .print-bar button { padding: 8px 16px; margin-left: auto; }
 </style>
 </head>
 <body>
@@ -70,9 +90,25 @@
     <h1>Steam QR Launcher</h1>
     <p class="sub">Scan with your phone camera on the same Wi-Fi, or with a scanner on this PC. Codes point at {{.Base}}</p>
   </div>
-  <button onclick="window.print()" title="Prints one 3 × 2 in label per game. Choose the label printer and 100% scale.">Print cards</button>
+  <div class="header-actions">
+    <button onclick="location.href='/settings'">Settings</button>
+  </div>
 </header>
+<section class="print-bar" aria-label="Print settings">
+  <span class="title">Print</span>
+  <label>Template <select id="template"></select></label>
+  <label title="Side A is the full art; side B is the game details. Both sides prints double-sided: set the printer to print on both sides, flip on long edge.">
+    Sides <select id="sides">
+      <option value="ab">Both sides (A art, B details)</option>
+      <option value="a">Side A only (art)</option>
+      <option value="b">Side B only (details)</option>
+    </select></label>
+  <label id="qrLabel" title="Include the QR code on side B"><input type="checkbox" id="showQR" checked> QR code on side B</label>
+  <button id="print" title="Print at 100% scale with margins set to None or Default">Print cards</button>
+</section>
 <div class="grid" id="grid"></div>
+<div id="print-root"></div>
+<style id="page-style"></style>
 <script>
   const APPS = {{.Apps}};
   const BASE = {{.Base}};
@@ -145,6 +181,154 @@
       }));
     }
   }
+
+  // Print templates. All sizes are what the stock measures; Avery lists
+  // 28877 as using the same layout as 5371 (2 × 5, 0.5in top, 0.75in sides).
+  const TEMPLATES = {
+    "avery-28877": { label: "Avery 28877 Clean Edge (10 per sheet)", page: ["8.5in", "11in"], cols: 2, rows: 5,
+                     card: ["3.5in", "2in"], margin: "0.5in 0.75in", gap: "0", pad: "3mm" },
+    "avery-5371":  { label: "Avery 5371 business cards (10 per sheet)", page: ["8.5in", "11in"], cols: 2, rows: 5,
+                     card: ["3.5in", "2in"], margin: "0.5in 0.75in", gap: "0", pad: "3mm" },
+    "cr80":        { label: "Credit card size, 85.6 × 54 mm (8 per sheet)", page: ["8.5in", "11in"], cols: 2, rows: 4,
+                     card: ["85.6mm", "53.98mm"], gap: "6mm", center: true, cutlines: true, pad: "3mm" },
+    "labelife":    { label: "LabelLife thermal label, 3 × 2 in", page: ["3in", "2in"], cols: 1, rows: 1,
+                     card: ["3in", "2in"], gap: "0", mono: true, pad: "2.5mm", singleSided: true },
+  };
+  const $ = id => document.getElementById(id);
+  const prefs = (() => { try { return JSON.parse(localStorage.getItem("printPrefs")) || {}; } catch { return {}; } })();
+  for (const [id, t] of Object.entries(TEMPLATES)) $("template").append(new Option(t.label, id));
+  $("template").value = TEMPLATES[prefs.template] ? prefs.template : "avery-28877";
+  $("sides").value = ["a", "b", "ab"].includes(prefs.sides) ? prefs.sides : "ab";
+  $("showQR").checked = prefs.showQR !== false;
+
+  function syncPrintBar() {
+    // Labels are one-sided, so they print side A or side B, not both.
+    const single = !!TEMPLATES[$("template").value].singleSided;
+    $("sides").querySelector('option[value="ab"]').disabled = single;
+    if (single && $("sides").value === "ab") $("sides").value = "b";
+    const hasB = $("sides").value !== "a";
+    $("showQR").disabled = !hasB;
+    $("qrLabel").classList.toggle("disabled", !hasB);
+    try {
+      localStorage.setItem("printPrefs", JSON.stringify({ template: $("template").value, sides: $("sides").value, showQR: $("showQR").checked }));
+    } catch {}
+  }
+  for (const id of ["template", "sides", "showQR"]) $(id).addEventListener("change", syncPrintBar);
+  syncPrintBar();
+
+  const loadImg = (img, ...srcs) => (async () => {
+    for (const src of srcs) {
+      img.src = src;
+      try { await img.decode(); return true; } catch {}
+    }
+    img.remove();
+    return false;
+  })();
+
+  function textDivs(el, card) {
+    for (const cls of ["name", "meta", "desc"]) {
+      const div = document.createElement("div");
+      div.className = cls;
+      div.textContent = el.querySelector("." + cls).textContent;
+      card.append(div);
+    }
+  }
+
+  function qrDiv(el) {
+    const qr = document.createElement("div");
+    qr.className = "qr";
+    qr.innerHTML = el.querySelector(".qr").innerHTML;
+    return qr;
+  }
+
+  // Side A: hero art with the logo over it, or the
+  // header art when there's no hero; the name when there's no logo.
+  function artCard(id, el, opts, waits) {
+    const pc = document.createElement("div");
+    pc.className = "pcard art";
+    const hero = document.createElement("img");
+    hero.className = "hero";
+    const logo = document.createElement("img");
+    logo.className = "logo";
+    pc.append(hero, logo);
+    waits.push((async () => {
+      const hasHero = await loadImg(hero, `/art/${id}/hero`, `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_hero.jpg`);
+      if (!hasHero) {
+        logo.remove();
+        const header = document.createElement("img");
+        header.className = "hero";
+        pc.prepend(header);
+        await loadImg(header, `/art/${id}/header`, el.querySelector("img.cover").currentSrc);
+        return;
+      }
+      if (!await loadImg(logo, `/art/${id}/logo`, `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/logo.png`)) {
+        const title = document.createElement("div");
+        title.className = "title";
+        title.textContent = el.querySelector(".name").textContent;
+        pc.append(title);
+      }
+    })());
+    return pc;
+  }
+
+  // Side B: details and optional QR.
+  function backCard(id, el, opts) {
+    const pc = document.createElement("div");
+    pc.className = "pcard back" + (opts.qr ? "" : " noqr");
+    textDivs(el, pc);
+    if (opts.qr) pc.append(qrDiv(el));
+    return pc;
+  }
+
+  function newSheet(t) {
+    const sheet = document.createElement("div");
+    sheet.className = "sheet" + (t.cutlines ? " cutlines" : "") + (t.mono ? " mono" : "");
+    Object.assign(sheet.style, {
+      width: t.page[0], height: t.page[1], padding: t.margin || "0", gap: t.gap,
+      gridTemplateColumns: `repeat(${t.cols}, ${t.card[0]})`, gridTemplateRows: `repeat(${t.rows}, ${t.card[1]})`,
+      placeContent: t.center ? "center" : "start",
+    });
+    return sheet;
+  }
+
+  function place(sheet, card, t, row, col, pad) {
+    card.style.gridRow = row + 1;
+    card.style.gridColumn = col + 1;
+    if (pad) card.style.padding = pad;
+    sheet.append(card);
+  }
+
+  // Builds the sheets for the chosen template and sides. With both sides,
+  // each side A sheet is followed by its side B, mirrored left-to-right so
+  // cards line up when the printer flips on the long edge.
+  function buildPrint() {
+    const t = TEMPLATES[$("template").value];
+    const sides = $("sides").value;
+    const opts = { qr: $("showQR").checked };
+    $("page-style").textContent = `@page { size: ${t.page[0]} ${t.page[1]}; margin: 0; }`;
+    const root = $("print-root");
+    root.replaceChildren();
+    const waits = [];
+    const perSheet = t.cols * t.rows;
+    for (let i = 0; i < APPS.length; i += perSheet) {
+      const batch = APPS.slice(i, i + perSheet);
+      const front = newSheet(t), back = newSheet(t);
+      batch.forEach(({ id }, n) => {
+        const el = cardEls[id], row = Math.floor(n / t.cols), col = n % t.cols;
+        if (sides.includes("a")) place(front, artCard(id, el, opts, waits), t, row, col);
+        if (sides.includes("b")) place(back, backCard(id, el, opts), t, row, sides === "ab" ? t.cols - 1 - col : col, t.pad);
+      });
+      if (sides.includes("a")) root.append(front);
+      if (sides.includes("b")) root.append(back);
+    }
+    return Promise.all(waits);
+  }
+  $("print").addEventListener("click", async () => {
+    $("print").disabled = true;
+    try { await buildPrint(); window.print(); } finally { $("print").disabled = false; }
+  });
+  window.addEventListener("beforeprint", () => { if (!$("print-root").children.length) buildPrint(); });
+  window.addEventListener("afterprint", () => $("print-root").replaceChildren());
 
   if (NFC) {
     document.getElementById("cancel-link").addEventListener("click", () => api("cancel", {}));

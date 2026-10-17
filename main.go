@@ -57,7 +57,7 @@ func main() {
 	}
 	details := LoadDetails()
 	go details.FetchMissing(launcher.Apps())
-	srv := &Server{launcher: launcher, key: key, base: fmt.Sprintf("http://%s:%d", host, cfg.Port), details: details}
+	srv := &Server{launcher: launcher, key: key, base: fmt.Sprintf("http://%s:%d", host, cfg.Port), details: details, cfg: cfg, quit: systray.Quit}
 	if !strings.EqualFold(cfg.NFCBase, "off") {
 		cards, err := LoadCards()
 		if err != nil {
@@ -97,6 +97,7 @@ func onReady(cfg Config, launcher *Launcher, details *DetailsStore, nfc *NFCMana
 	}
 
 	mOpen := systray.AddMenuItem("Open QR page", "Show the QR codes for your games")
+	mSettings := systray.AddMenuItem("Settings…", "Change ports, scanner, NFC and update settings")
 	mRescan := systray.AddMenuItem("Rescan games", "Re-read the Steam library")
 	mLog := systray.AddMenuItem("Open log folder", "")
 	systray.AddSeparator()
@@ -110,6 +111,8 @@ func onReady(cfg Config, launcher *Launcher, details *DetailsStore, nfc *NFCMana
 			select {
 			case <-mOpen.ClickedCh:
 				shellOpen(pageURL)
+			case <-mSettings.ClickedCh:
+				shellOpen(pageURL + "settings")
 			case <-mRescan.ClickedCh:
 				if err := launcher.Rescan(); err != nil {
 					log.Printf("rescan: %v", err)
