@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/lmorrison/steam-launcher/internal/infinity"
+	"github.com/lioneljmorrison/steam-launcher/internal/infinity"
 )
 
 func main() {

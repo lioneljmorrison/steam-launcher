@@ -1,4 +1,4 @@
-module github.com/lmorrison/steam-launcher
+module github.com/lioneljmorrison/steam-launcher
 
 go 1.27.0
 

@@ -26,6 +26,8 @@ const (
 
 func main() {
 	setupLogging()
+	finishUpdate()
+	log.Printf("starting %s %s", appName, version)
 
 	name, _ := windows.UTF16PtrFromString(`Local\SteamQRLauncher`)
 	if _, err := windows.CreateMutex(nil, false, name); errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
@@ -98,6 +100,7 @@ func onReady(cfg Config, launcher *Launcher, details *DetailsStore, nfc *NFCMana
 	mRescan := systray.AddMenuItem("Rescan games", "Re-read the Steam library")
 	mLog := systray.AddMenuItem("Open log folder", "")
 	systray.AddSeparator()
+	mUpdate := systray.AddMenuItem(updateTitle(), "Download and install a newer version")
 	mStartup := systray.AddMenuItemCheckbox("Start with Windows", "", startupEnabled())
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "")
@@ -114,6 +117,8 @@ func onReady(cfg Config, launcher *Launcher, details *DetailsStore, nfc *NFCMana
 				go details.FetchMissing(launcher.Apps())
 			case <-mLog.ClickedCh:
 				shellOpen(logDir())
+			case <-mUpdate.ClickedCh:
+				go runUpdateCheck(cfg, mUpdate)
 			case <-mStartup.ClickedCh:
 				if err := setStartup(!mStartup.Checked()); err != nil {
 					log.Printf("start with windows: %v", err)
@@ -172,11 +177,53 @@ func setupLogging() {
 	}
 }
 
+func updateTitle() string { return "Check for updates (" + version + ")" }
+
+// runUpdateCheck backs the tray's "Check for updates" item: it asks before
+// installing, then hands over to the new version and quits.
+func runUpdateCheck(cfg Config, item *systray.MenuItem) {
+	item.Disable()
+	item.SetTitle("Checking for updates…")
+	defer func() {
+		item.SetTitle(updateTitle())
+		item.Enable()
+	}()
+
+	m, newer, err := checkForUpdate(cfg)
+	if err != nil {
+		log.Printf("update check: %v", err)
+		messageBox("Couldn't check for updates:\n\n"+err.Error(), windows.MB_OK|windows.MB_ICONWARNING)
+		return
+	}
+	if !newer {
+		messageBox(fmt.Sprintf("You're on the latest version (%s).", version), windows.MB_OK|windows.MB_ICONINFORMATION)
+		return
+	}
+	msg := fmt.Sprintf("Version %s is available (you have %s).\n\nUpdate now? The launcher will restart.", m.Version, version)
+	if messageBox(msg, windows.MB_YESNO|windows.MB_ICONQUESTION) != idYes {
+		return
+	}
+	item.SetTitle("Updating to " + m.Version + "…")
+	if err := applyUpdate(m); err != nil {
+		log.Printf("update: %v", err)
+		messageBox("Update failed:\n\n"+err.Error(), windows.MB_OK|windows.MB_ICONERROR)
+		return
+	}
+	systray.Quit()
+}
+
+const idYes = 6
+
+func messageBox(msg string, flags uint32) int32 {
+	text, _ := windows.UTF16PtrFromString(msg)
+	caption, _ := windows.UTF16PtrFromString(appName)
+	ret, _ := windows.MessageBox(0, text, caption, flags|windows.MB_SETFOREGROUND)
+	return ret
+}
+
 // fatal shows a message box, since a windowsgui app has no console.
 func fatal(msg string) {
 	log.Print(msg)
-	text, _ := windows.UTF16PtrFromString(msg)
-	caption, _ := windows.UTF16PtrFromString(appName)
-	windows.MessageBox(0, text, caption, windows.MB_OK|windows.MB_ICONERROR)
+	messageBox(msg, windows.MB_OK|windows.MB_ICONERROR)
 	os.Exit(1)
 }
