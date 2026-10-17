@@ -10,23 +10,79 @@
   h1 { margin: 0 0 4px; color: #fff; }
   p.sub { margin: 0 0 24px; opacity: .7; font-size: 14px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-  .card { background: #fff; color: #111; border-radius: 10px; overflow: hidden; text-align: center; }
+  .card { position: relative; background: #fff; color: #111; border-radius: 10px; overflow: hidden; text-align: center; }
   .card img.cover { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; display: block; background: #2a475e; }
   .card .qr svg { width: 180px; height: 180px; margin: 12px auto 4px; display: block; }
-  .card .name { font-weight: 600; padding: 0 10px; }
-  .card .id { font-size: 12px; opacity: .6; padding: 2px 0 12px; }
-  @media print { body { background: #fff; } h1, p.sub { color: #000; } .card { border: 1px solid #ccc; break-inside: avoid; } }
+  .card .name { font-weight: 600; padding: 0 10px 2px; }
+  .card .meta { font-size: 12px; opacity: .65; padding: 0 10px 12px; }
+  .card .meta:empty { display: none; }
+  .card .desc { display: none; } /* labels only */
+  .card .links { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 0 10px 12px; }
+  .card .links:empty { display: none; }
+  .card .link { display: inline-flex; align-items: center; gap: 4px; background: #e7eef4; border-radius: 99px; padding: 2px 4px 2px 10px; font-size: 12px; }
+  .card .link code { font-size: 12px; }
+  .card .link svg { width: 14px; height: 14px; color: #1b2838; flex: none; }
+  .card .link button { background: transparent; color: #555; padding: 0 6px; border-radius: 99px; line-height: 18px; }
+  .card .link button:hover { background: #c94b4b; color: #fff; }
+  body.linking .card { cursor: pointer; outline: 3px solid transparent; transition: outline-color .15s; }
+  body.linking .card:hover { outline-color: #e8a33d; }
+  .banner { display: none; position: sticky; top: 0; z-index: 1; margin: 0 0 20px; padding: 14px 18px; border-radius: 10px; background: #e8a33d; color: #1b2838; font-weight: 600; }
+  body.linking .banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+  .banner code { font-size: 15px; }
+  button { font: inherit; border: 0; border-radius: 6px; padding: 4px 12px; cursor: pointer; background: #2a475e; color: #fff; }
+  button:hover { background: #3d6c8d; }
+  .muted { opacity: .7; }
+  header { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; }
+  header button { padding: 8px 16px; flex: none; }
+
+  /* Print: one 3 × 2 in label per game, for a thermal label printer.
+     Black only (thermal can't print colour); print at 100% scale. */
+  @page { size: 3in 2in; margin: 0; }
+  @media print {
+    html, body { background: #fff; padding: 0; margin: 0; }
+    header, .banner, .card .links { display: none !important; }
+    .grid { display: block; }
+    .card {
+      width: 3in; height: 2in; box-sizing: border-box; padding: 2.5mm;
+      border: 0; border-radius: 0; outline: none !important; color: #000;
+      display: grid; grid-template-columns: 1fr 22mm; grid-template-rows: auto auto auto 1fr;
+      grid-template-areas: "cover qr" "name name" "meta meta" "desc desc"; column-gap: 2.5mm;
+      text-align: left; break-after: page; break-inside: avoid; overflow: hidden;
+    }
+    .card:last-child { break-after: auto; }
+    .card .qr { grid-area: qr; align-self: start; }
+    .card .qr svg { width: 22mm; height: 22mm; margin: 0; }
+    .card img.cover { grid-area: cover; height: 22mm; filter: grayscale(1) contrast(1.15); }
+    .card .name { grid-area: name; padding: 1.5mm 0 0; font-size: 9pt; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card .meta { grid-area: meta; padding: 0.4mm 0 0; font-size: 6.5pt; opacity: 1; }
+    .card .desc:not(:empty) { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+    .card .desc { grid-area: desc; padding: 0.8mm 0 0; font-size: 6pt; line-height: 1.25; -webkit-line-clamp: 3; max-height: 3.75em; }
+  }
 </style>
 </head>
 <body>
-<h1>Steam QR Launcher</h1>
-<p class="sub">Scan with your phone camera on the same Wi-Fi, or with a scanner on this PC. Codes point at {{.Base}}</p>
+<div class="banner" id="banner">
+  <span>New card <code id="pending-uid"></code> on the base — click a game to link it.</span>
+  <button id="cancel-link" title="Forget this card (Esc)">Cancel</button>
+</div>
+<header>
+  <div>
+    <h1>Steam QR Launcher</h1>
+    <p class="sub">Scan with your phone camera on the same Wi-Fi, or with a scanner on this PC. Codes point at {{.Base}}</p>
+  </div>
+  <button onclick="window.print()" title="Prints one 3 × 2 in label per game. Choose the label printer and 100% scale.">Print cards</button>
+</header>
 <div class="grid" id="grid"></div>
 <script>
   const APPS = {{.Apps}};
   const BASE = {{.Base}};
   const KEY = {{.Key}};
+  const NFC = {{.NFC}};
+  const DETAILS = {{.Details}};
   const grid = document.getElementById("grid");
+  const cardEls = {};
+  let pending = null;
+
   for (const { id, name } of APPS) {
     const url = `${BASE}/launch/${id}?k=${encodeURIComponent(KEY)}`;
     const qr = qrcode(0, "M");
@@ -35,13 +91,66 @@
     const card = document.createElement("div");
     card.className = "card";
     card.innerHTML = `
-      <img class="cover" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg" onerror="this.style.visibility='hidden'">
+      <img class="cover" src="/cover/${id}" data-cdn="https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg"
+        onerror="if (this.dataset.cdn) { this.src = this.dataset.cdn; this.dataset.cdn = ''; } else this.style.visibility = 'hidden'">
       <div class="qr">${qr.createSvgTag({ scalable: true, margin: 2 })}</div>
       <div class="name"></div>
-      <div class="id">${id}</div>`;
+      <div class="meta"></div>
+      <div class="desc"></div>
+      <div class="links"></div>`;
     card.querySelector(".name").textContent = name;
+    const d = DETAILS[id];
+    if (d) {
+      card.querySelector(".meta").textContent = [d.developer, d.year, (d.genres || []).slice(0, 2).join(", ")].filter(Boolean).join(" · ");
+      card.querySelector(".desc").textContent = d.description || "";
+    }
     card.title = url;
+    card.addEventListener("click", () => { if (pending) api("link", { uid: pending.uid, appid: id }); });
     grid.appendChild(card);
+    cardEls[id] = card;
+  }
+
+  async function api(action, body) {
+    const res = await fetch(action ? `/api/cards/${action}` : "/api/cards", {
+      method: action ? "POST" : "GET",
+      headers: { "X-Key": KEY, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (res.ok) render(await res.json());
+  }
+
+  function render({ pending: p, cards }) {
+    pending = p;
+    document.body.classList.toggle("linking", !!p);
+    document.getElementById("pending-uid").textContent = p ? p.uid : "";
+
+    const byApp = {};
+    for (const c of cards) (byApp[c.appid] ||= []).push(c.uid);
+    for (const [id, el] of Object.entries(cardEls)) {
+      const uids = (byApp[id] || []).sort();
+      const links = el.querySelector(".links");
+      if (links.dataset.uids === uids.join()) continue; // unchanged; don't rebuild under the cursor
+      links.dataset.uids = uids.join();
+      links.replaceChildren(...uids.map(uid => {
+        const chip = document.createElement("span");
+        chip.className = "link";
+        chip.title = "NFC card linked to this game";
+        chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-label="NFC"><path d="M7 9a4.5 4.5 0 0 1 0 6"/><path d="M10.5 6a9 9 0 0 1 0 12"/><path d="M14 3a13.5 13.5 0 0 1 0 18"/></svg><code></code><button title="Unlink this card">×</button>`;
+        chip.querySelector("code").textContent = uid;
+        chip.querySelector("button").addEventListener("click", e => {
+          e.stopPropagation();
+          api("unlink", { uid });
+        });
+        return chip;
+      }));
+    }
+  }
+
+  if (NFC) {
+    document.getElementById("cancel-link").addEventListener("click", () => api("cancel", {}));
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && pending) api("cancel", {}); });
+    api();
+    setInterval(api, 1000);
   }
 </script>
 </body>

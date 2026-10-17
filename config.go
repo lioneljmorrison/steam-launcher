@@ -21,6 +21,7 @@ type Config struct {
 	ScannerPort  string `json:"scannerPort"`
 	ScannerBaud  int    `json:"scannerBaud"`
 	ScannerMatch string `json:"scannerMatch"` // regexp for auto-detected Bluetooth device names
+	NFCBase      string `json:"nfcBase"`      // "off" disables the Disney Infinity base
 }
 
 func configDir() string {

@@ -53,19 +53,35 @@ func main() {
 	if host == "" {
 		host = lanIP()
 	}
-	srv := &Server{launcher: launcher, key: key, base: fmt.Sprintf("http://%s:%d", host, cfg.Port)}
+	details := LoadDetails()
+	go details.FetchMissing(launcher.Apps())
+	srv := &Server{launcher: launcher, key: key, base: fmt.Sprintf("http://%s:%d", host, cfg.Port), details: details}
+	if !strings.EqualFold(cfg.NFCBase, "off") {
+		cards, err := LoadCards()
+		if err != nil {
+			fatal("Couldn't read cards.json: " + err.Error())
+		}
+		srv.nfc = NewNFCManager(launcher, cards, nil)
+	}
 	go func() { log.Fatal(http.Serve(ln, srv.Handler())) }()
 	log.Printf("serving on :%d, codes point at %s", cfg.Port, srv.base)
 
 	pageURL := fmt.Sprintf("http://localhost:%d/", cfg.Port)
-	systray.Run(func() { onReady(cfg, launcher, pageURL) }, func() { log.Print("exiting") })
+	systray.Run(func() { onReady(cfg, launcher, details, srv.nfc, pageURL) }, func() { log.Print("exiting") })
 }
 
-func onReady(cfg Config, launcher *Launcher, pageURL string) {
+func onReady(cfg Config, launcher *Launcher, details *DetailsStore, nfc *NFCManager, pageURL string) {
 	systray.SetIcon(trayIcon())
 	systray.SetTitle(appName)
 	systray.SetTooltip(appName)
 	systray.SetOnTapped(func() { shellOpen(pageURL) })
+
+	if nfc != nil {
+		mNFC := systray.AddMenuItem("NFC base: looking…", "")
+		mNFC.Disable()
+		nfc.onStatus = mNFC.SetTitle
+		go nfc.Run()
+	}
 
 	if !strings.EqualFold(cfg.ScannerPort, "off") {
 		mScanner := systray.AddMenuItem("Scanner: looking…", "")
@@ -95,6 +111,7 @@ func onReady(cfg Config, launcher *Launcher, pageURL string) {
 				if err := launcher.Rescan(); err != nil {
 					log.Printf("rescan: %v", err)
 				}
+				go details.FetchMissing(launcher.Apps())
 			case <-mLog.ClickedCh:
 				shellOpen(logDir())
 			case <-mStartup.ClickedCh:

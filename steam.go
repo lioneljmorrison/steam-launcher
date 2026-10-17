@@ -66,6 +66,27 @@ func installedApps() ([]App, error) {
 	return apps, nil
 }
 
+// coverPath finds the Steam client's cached header image for an app. Newer
+// apps keep it under a hashed folder (librarycache/<appid>/<hash>/library_header.jpg),
+// which the public CDN can't serve without that hash.
+func coverPath(appID string) (string, bool) {
+	dir := filepath.Join(steamRoot(), "appcache", "librarycache", appID)
+	var best string
+	var bestTime int64
+	for _, pattern := range []string{"library_header.jpg", "*/library_header.jpg", "header.jpg", "*/header.jpg"} {
+		matches, _ := filepath.Glob(filepath.Join(dir, pattern))
+		for _, m := range matches {
+			if fi, err := os.Stat(m); err == nil && fi.ModTime().UnixNano() > bestTime {
+				best, bestTime = m, fi.ModTime().UnixNano()
+			}
+		}
+		if best != "" {
+			return best, true
+		}
+	}
+	return "", false
+}
+
 func shellOpen(target string) error {
 	verb, _ := windows.UTF16PtrFromString("open")
 	file, err := windows.UTF16PtrFromString(target)
