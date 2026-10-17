@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Steam QR Launcher</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background: #1b2838; color: #c7d5e0; margin: 0; padding: 24px; }
+  h1 { margin: 0 0 4px; color: #fff; }
+  p.sub { margin: 0 0 24px; opacity: .7; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .card { background: #fff; color: #111; border-radius: 10px; overflow: hidden; text-align: center; }
+  .card img.cover { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; display: block; background: #2a475e; }
+  .card .qr svg { width: 180px; height: 180px; margin: 12px auto 4px; display: block; }
+  .card .name { font-weight: 600; padding: 0 10px; }
+  .card .id { font-size: 12px; opacity: .6; padding: 2px 0 12px; }
+  @media print { body { background: #fff; } h1, p.sub { color: #000; } .card { border: 1px solid #ccc; break-inside: avoid; } }
+</style>
+</head>
+<body>
+<h1>Steam QR Launcher</h1>
+<p class="sub">Scan with your phone camera on the same Wi-Fi, or with a scanner on this PC. Codes point at {{.Base}}</p>
+<div class="grid" id="grid"></div>
+<script>
+  const APPS = {{.Apps}};
+  const BASE = {{.Base}};
+  const KEY = {{.Key}};
+  const grid = document.getElementById("grid");
+  for (const { id, name } of APPS) {
+    const url = `${BASE}/launch/${id}?k=${encodeURIComponent(KEY)}`;
+    const qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <img class="cover" src="https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg" onerror="this.style.visibility='hidden'">
+      <div class="qr">${qr.createSvgTag({ scalable: true, margin: 2 })}</div>
+      <div class="name"></div>
+      <div class="id">${id}</div>`;
+    card.querySelector(".name").textContent = name;
+    card.title = url;
+    grid.appendChild(card);
+  }
+</script>
+</body>
+</html>
