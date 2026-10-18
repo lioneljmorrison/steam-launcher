@@ -81,12 +81,19 @@
 
     <fieldset>
       <legend>Updates</legend>
+      <label><span>Channel</span>
+        <select id="updateChannel">
+          <option value="">Stable</option>
+          <option value="beta">Beta (pre-releases)</option>
+        </select>
+        <span class="hint">Beta gets new features to try before they're released, and may have bugs. You move back onto stable once a stable release is newer than your beta.</span>
+      </label>
       <label><span>Update URL</span>
         <div class="row">
-          <input type="text" id="updateURL">
+          <input type="text" id="updateURL" placeholder="GitHub releases (default)">
           <button type="button" id="resetURL">Reset to default</button>
         </div>
-        <span class="hint">Where to find <code>latest.json</code> for new versions.</span>
+        <span class="hint">Leave blank to use GitHub releases. A custom <code>latest.json</code> URL overrides the channel.</span>
       </label>
       <div class="actions" style="margin: 0 0 14px">
         <span>Version <code id="version"></code></span>
@@ -141,6 +148,7 @@
     $("scannerBaud").value = c.scannerBaud;
     $("nfcBase").checked = c.nfcBase !== "off";
     $("updateURL").value = c.updateURL;
+    $("updateChannel").value = c.updateChannel || "";
 
     const sp = (c.scannerPort || "").toUpperCase();
     $("scannerMode").value = sp === "" ? "auto" : sp === "OFF" ? "off" : "port";
@@ -182,6 +190,7 @@
       scannerMatch: $("scannerMatch").value,
       nfcBase: $("nfcBase").checked ? "" : "off",
       updateURL: $("updateURL").value.trim(),
+      updateChannel: $("updateChannel").value,
     };
     const button = e.submitter;
     button.disabled = true;

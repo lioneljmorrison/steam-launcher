@@ -34,47 +34,90 @@ type Manifest struct {
 	SHA256  string `json:"sha256"`
 }
 
-var errUpdatesNotConfigured = errors.New("no update URL set; add one in Settings")
+var errUpdatesNotConfigured = errors.New("this build has no GitHub repo; add an update URL in Settings")
 
-// defaultUpdateURL is latest.json on this build's GitHub releases.
-func defaultUpdateURL() (string, error) {
-	if updateRepo == "" {
-		return "", errUpdatesNotConfigured
-	}
-	return "https://github.com/" + updateRepo + "/releases/latest/download/latest.json", nil
-}
-
-func manifestURL(cfg Config) (string, error) {
-	if cfg.UpdateURL != "" {
-		return cfg.UpdateURL, nil
-	}
-	return defaultUpdateURL()
-}
+// Update channels. Stable sees only full releases; beta also sees GitHub
+// pre-releases (tags like v0.3.0-beta.1), and moves onto the next stable
+// release once that is newer.
+const (
+	channelStable = ""
+	channelBeta   = "beta"
+)
 
 var httpClient = &http.Client{Timeout: 2 * time.Minute}
 
-// checkForUpdate returns the latest manifest and whether it's newer than this build.
+// checkForUpdate returns the newest manifest on the configured channel and
+// whether it's newer than this build. A custom update URL overrides the channel.
 func checkForUpdate(cfg Config) (*Manifest, bool, error) {
-	url, err := manifestURL(cfg)
-	if err != nil {
-		return nil, false, err
-	}
-	resp, err := httpClient.Get(url)
-	if err != nil {
-		return nil, false, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("%s: %s", url, resp.Status)
+	url := cfg.UpdateURL
+	if url == "" {
+		if updateRepo == "" {
+			return nil, false, errUpdatesNotConfigured
+		}
+		var err error
+		if url, err = channelManifestURL(cfg.UpdateChannel); err != nil {
+			return nil, false, err
+		}
 	}
 	var m Manifest
-	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
-		return nil, false, fmt.Errorf("bad latest.json: %w", err)
+	if err := getJSON(url, &m); err != nil {
+		return nil, false, fmt.Errorf("latest.json: %w", err)
 	}
 	if m.Version == "" || m.URL == "" || len(m.SHA256) != 64 {
 		return nil, false, errors.New("latest.json is missing version, url or sha256")
 	}
 	return &m, newerVersion(m.Version, version), nil
+}
+
+// channelManifestURL finds latest.json for the newest release on a channel.
+// GitHub's /releases/latest skips pre-releases, so beta lists the releases.
+func channelManifestURL(channel string) (string, error) {
+	if channel != channelBeta {
+		return "https://github.com/" + updateRepo + "/releases/latest/download/latest.json", nil
+	}
+	var releases []struct {
+		Tag    string `json:"tag_name"`
+		Draft  bool   `json:"draft"`
+		Assets []struct {
+			Name string `json:"name"`
+			URL  string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := getJSON("https://api.github.com/repos/"+updateRepo+"/releases?per_page=30", &releases); err != nil {
+		return "", fmt.Errorf("list releases: %w", err)
+	}
+	best, bestTag := "", ""
+	for _, r := range releases {
+		if r.Draft || parseVersion(r.Tag) == nil || (bestTag != "" && !newerVersion(r.Tag, bestTag)) {
+			continue
+		}
+		for _, a := range r.Assets {
+			if a.Name == "latest.json" {
+				best, bestTag = a.URL, r.Tag
+			}
+		}
+	}
+	if best == "" {
+		return "", errors.New("no releases with latest.json found")
+	}
+	return best, nil
+}
+
+func getJSON(url string, v any) error {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s: %s", url, resp.Status)
+	}
+	return json.NewDecoder(resp.Body).Decode(v)
 }
 
 // applyUpdate downloads and verifies the new exe, swaps it in place of the
@@ -185,10 +228,21 @@ func waitForExit(pid uint32, timeout time.Duration) {
 	windows.WaitForSingleObject(h, uint32(timeout.Milliseconds()))
 }
 
-var semverRe = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)`)
+var (
+	semverRe   = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?`)
+	describeRe = regexp.MustCompile(`(-\d+-g[0-9a-f]+)?(-dirty)?$`)
+)
 
-// newerVersion reports whether a is a later release than b. Builds that
-// aren't a release version (e.g. "dev") count as older than any release.
+type semver struct {
+	nums [3]int
+	pre  []string // e.g. ["beta", "1"]; empty for a full release
+}
+
+// newerVersion reports whether a is a later release than b, ordering
+// pre-releases before their release (v0.3.0-beta.1 < v0.3.0-beta.2 < v0.3.0).
+// Builds that aren't a release version (e.g. "dev") count as older than any
+// release, and local builds between tags (v0.3.0-2-gabc123-dirty) count as
+// the tag they're built on.
 func newerVersion(a, b string) bool {
 	pa, pb := parseVersion(a), parseVersion(b)
 	if pa == nil {
@@ -197,22 +251,64 @@ func newerVersion(a, b string) bool {
 	if pb == nil {
 		return true
 	}
-	for i := range pa {
-		if pa[i] != pb[i] {
-			return pa[i] > pb[i]
+	for i := range pa.nums {
+		if pa.nums[i] != pb.nums[i] {
+			return pa.nums[i] > pb.nums[i]
 		}
 	}
-	return false
+	return comparePre(pa.pre, pb.pre) > 0
 }
 
-func parseVersion(v string) []int {
-	m := semverRe.FindStringSubmatch(v)
+func parseVersion(v string) *semver {
+	m := semverRe.FindStringSubmatch(describeRe.ReplaceAllString(v, ""))
 	if m == nil {
 		return nil
 	}
-	out := make([]int, 3)
-	for i := range out {
-		out[i], _ = strconv.Atoi(m[i+1])
+	var s semver
+	for i := range s.nums {
+		s.nums[i], _ = strconv.Atoi(m[i+1])
 	}
-	return out
+	if m[4] != "" {
+		s.pre = strings.Split(m[4], ".")
+	}
+	return &s
+}
+
+// comparePre orders pre-release identifiers by semver rules.
+func comparePre(a, b []string) int {
+	switch {
+	case len(a) == 0 && len(b) == 0:
+		return 0
+	case len(a) == 0:
+		return 1
+	case len(b) == 0:
+		return -1
+	}
+	for i := 0; i < len(a) && i < len(b); i++ {
+		na, aErr := strconv.Atoi(a[i])
+		nb, bErr := strconv.Atoi(b[i])
+		switch {
+		case aErr == nil && bErr == nil:
+			if na != nb {
+				return cmpInt(na, nb)
+			}
+		case aErr == nil:
+			return -1 // numeric identifiers sort before alphanumeric ones
+		case bErr == nil:
+			return 1
+		case a[i] != b[i]:
+			return strings.Compare(a[i], b[i])
+		}
+	}
+	return cmpInt(len(a), len(b))
+}
+
+func cmpInt(a, b int) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
 }

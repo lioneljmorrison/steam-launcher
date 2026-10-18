@@ -107,6 +107,8 @@ func validateConfig(cfg *Config) error {
 		return fmt.Errorf("baud rate must be positive")
 	case cfg.NFCBase != "" && cfg.NFCBase != "off":
 		return fmt.Errorf(`NFC base must be "" or "off"`)
+	case cfg.UpdateChannel != channelStable && cfg.UpdateChannel != channelBeta:
+		return fmt.Errorf(`update channel must be "" (stable) or "beta"`)
 	}
 	if _, err := regexp.Compile(cfg.ScannerMatch); err != nil {
 		return fmt.Errorf("scanner name match: %v", err)

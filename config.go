@@ -23,7 +23,9 @@ type Config struct {
 	ScannerBaud  int    `json:"scannerBaud"`
 	ScannerMatch string `json:"scannerMatch"` // regexp for auto-detected Bluetooth device names
 	NFCBase      string `json:"nfcBase"`      // "off" disables the Disney Infinity base
-	UpdateURL    string `json:"updateURL"`    // latest.json to check for updates
+	// UpdateChannel is "" for stable releases or "beta" to include pre-releases.
+	UpdateChannel string `json:"updateChannel"`
+	UpdateURL     string `json:"updateURL"` // custom latest.json; empty uses GitHub releases for the channel
 }
 
 func configDir() string {
@@ -35,8 +37,7 @@ func configDir() string {
 }
 
 func defaultConfig() Config {
-	url, _ := defaultUpdateURL()
-	return Config{Port: 8787, ScannerBaud: 9600, ScannerMatch: `(?i)scan|barcode`, UpdateURL: url}
+	return Config{Port: 8787, ScannerBaud: 9600, ScannerMatch: `(?i)scan|barcode`}
 }
 
 func configPath() string { return filepath.Join(configDir(), "config.json") }
@@ -56,8 +57,10 @@ func loadConfig() (Config, error) {
 			return cfg, err
 		}
 	}
-	if cfg.UpdateURL == "" {
-		cfg.UpdateURL = defaultConfig().UpdateURL
+	// Older versions saved the stable latest.json URL here, which would now
+	// pin the channel to stable.
+	if updateRepo != "" && cfg.UpdateURL == "https://github.com/"+updateRepo+"/releases/latest/download/latest.json" {
+		cfg.UpdateURL = ""
 	}
 	if normalized, _ := json.MarshalIndent(cfg, "", "  "); !bytes.Equal(normalized, bytes.TrimSpace(b)) {
 		if err := saveConfig(cfg); err != nil {

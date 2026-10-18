@@ -22,12 +22,13 @@ install: build
 	mkdir -p "$(INSTALL_DIR)"
 	cp steam-launcher.exe "$(INSTALL_DIR)/"
 
-# make release VERSION=v0.3.0
+# make release VERSION=v0.3.0         (stable)
+# make release VERSION=v0.3.0-beta.1  (pre-release, only offered on the beta channel)
 # Tags the current commit, builds, and publishes a GitHub release with the exe
 # and latest.json, which running copies check via "Check for updates".
+PRERELEASE = $(if $(findstring -,$(VERSION)),--prerelease,)
 release:
-	@case "$(VERSION)" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "usage: make release VERSION=vX.Y.Z"; exit 1;; esac
-	@case "$(VERSION)" in *-*) echo "VERSION must be a plain vX.Y.Z"; exit 1;; esac
+	@echo "$(VERSION)" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[0-9]+)?$$' || { echo "usage: make release VERSION=vX.Y.Z or vX.Y.Z-beta.N (or -rc.N)"; exit 1; }
 	@test -n "$(REPO)" || { echo "no GitHub origin remote"; exit 1; }
 	@git diff --quiet && git diff --cached --quiet || { echo "commit your changes first"; exit 1; }
 	git tag -a $(VERSION) -m "$(VERSION)"
@@ -36,4 +37,4 @@ release:
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(DIST)/steam-launcher.exe .
 	printf '{\n  "version": "%s",\n  "url": "https://github.com/%s/releases/download/%s/steam-launcher.exe",\n  "sha256": "%s"\n}\n' \
 		"$(VERSION)" "$(REPO)" "$(VERSION)" "$$(sha256sum $(DIST)/steam-launcher.exe | cut -d' ' -f1)" > $(DIST)/latest.json
-	gh release create $(VERSION) $(DIST)/steam-launcher.exe $(DIST)/latest.json --repo $(REPO) --title "$(VERSION)" --generate-notes
+	gh release create $(VERSION) $(DIST)/steam-launcher.exe $(DIST)/latest.json --repo $(REPO) --title "$(VERSION)" --generate-notes $(PRERELEASE)
