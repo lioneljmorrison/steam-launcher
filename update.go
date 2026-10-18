@@ -25,7 +25,10 @@ var (
 	updateRepo = ""
 )
 
-const afterUpdateFlag = "--after-update"
+const (
+	afterUpdateFlag = "--after-update"
+	showFlag        = "--show"
+)
 
 // Manifest is latest.json, published alongside each release.
 type Manifest struct {
@@ -122,8 +125,9 @@ func getJSON(url string, v any) error {
 
 // applyUpdate downloads and verifies the new exe, swaps it in place of the
 // running one (Windows allows renaming a running exe, not overwriting it), and
-// starts it. The caller should exit right after so the new copy can take over.
-func applyUpdate(m *Manifest) error {
+// starts it, opening its window on show if that isn't empty. The caller
+// should exit right after so the new copy can take over.
+func applyUpdate(m *Manifest, show string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -144,7 +148,7 @@ func applyUpdate(m *Manifest) error {
 		os.Rename(oldPath, exe) // put the running version back
 		return fmt.Errorf("install new exe: %w", err)
 	}
-	pid, err := relaunch()
+	pid, err := relaunch(show)
 	if err != nil {
 		os.Rename(exe, newPath)
 		os.Rename(oldPath, exe)
@@ -155,13 +159,18 @@ func applyUpdate(m *Manifest) error {
 }
 
 // relaunch starts the exe at our path, which waits for this process to exit
-// before taking over. The caller should quit right after.
-func relaunch() (int, error) {
+// before taking over. The caller should quit right after. A non-empty show
+// is the page the new copy opens its window on, so the window comes back.
+func relaunch(show string) (int, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return 0, err
 	}
-	cmd := exec.Command(exe, afterUpdateFlag, strconv.Itoa(os.Getpid()))
+	args := []string{afterUpdateFlag, strconv.Itoa(os.Getpid())}
+	if show != "" {
+		args = append(args, showFlag, show)
+	}
+	cmd := exec.Command(exe, args...)
 	if err := cmd.Start(); err != nil {
 		return 0, err
 	}

@@ -13,7 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"fyne.io/systray"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
@@ -57,7 +58,8 @@ func main() {
 	}
 	details := LoadDetails()
 	go details.FetchMissing(launcher.Apps())
-	srv := &Server{launcher: launcher, key: key, base: fmt.Sprintf("http://%s:%d", host, cfg.Port), details: details, cfg: cfg, quit: systray.Quit}
+	var app *application.App
+	srv := &Server{launcher: launcher, key: key, base: fmt.Sprintf("http://%s:%d", host, cfg.Port), details: details, cfg: cfg, quit: func() { app.Quit() }}
 	if !strings.EqualFold(cfg.NFCBase, "off") {
 		cards, err := LoadCards()
 		if err != nil {
@@ -68,74 +70,118 @@ func main() {
 	go func() { log.Fatal(http.Serve(ln, srv.Handler())) }()
 	log.Printf("serving on :%d, codes point at %s", cfg.Port, srv.base)
 
-	pageURL := fmt.Sprintf("http://localhost:%d/", cfg.Port)
-	systray.Run(func() { onReady(cfg, launcher, details, srv.nfc, pageURL) }, func() { log.Print("exiting") })
+	app = application.New(application.Options{
+		Name:        appName,
+		Description: "Launch your games by scanning a QR code or NFC card",
+		Assets:      application.AssetOptions{Handler: http.NotFoundHandler()},
+		Windows:     application.WindowsOptions{WebviewUserDataPath: filepath.Join(logDir(), "webview")},
+	})
+	pageURL := fmt.Sprintf("http://localhost:%d", cfg.Port)
+	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:             "main",
+		Title:            appName,
+		Width:            1280,
+		Height:           900,
+		MinWidth:         640,
+		MinHeight:        480,
+		Hidden:           true,
+		BackgroundColour: application.NewRGB(0x1b, 0x28, 0x38),
+		URL:              pageURL + "/",
+	})
+	// Closing the window hides it to the tray rather than quitting.
+	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		win.Hide()
+		e.Cancel()
+	})
+	show := func(path string) {
+		win.SetURL(pageURL + path)
+		win.Show()
+		if win.IsMinimised() {
+			win.Restore()
+		}
+		win.Focus()
+	}
+	setupTray(app, cfg, launcher, details, srv.nfc, show)
+	if path := showArg(); path != "" {
+		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) { show(path) })
+	}
+
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
+	log.Print("exiting")
 }
 
-func onReady(cfg Config, launcher *Launcher, details *DetailsStore, nfc *NFCManager, pageURL string) {
-	systray.SetIcon(trayIcon())
-	systray.SetTitle(appName)
-	systray.SetTooltip(appName)
-	systray.SetOnTapped(func() { shellOpen(pageURL) })
+// showArg is the page passed by relaunch, to reopen the window after a restart.
+func showArg() string {
+	for i, arg := range os.Args {
+		if arg == showFlag && i+1 < len(os.Args) && strings.HasPrefix(os.Args[i+1], "/") {
+			return os.Args[i+1]
+		}
+	}
+	return ""
+}
+
+// onMain runs fn on the UI thread; menu items are changed from the scanner,
+// NFC and update goroutines. It only works once the app is running.
+func onMain(fn func()) { application.InvokeAsync(fn) }
+
+func setupTray(app *application.App, cfg Config, launcher *Launcher, details *DetailsStore, nfc *NFCManager, show func(path string)) {
+	tray := app.SystemTray.New()
+	tray.SetIcon(trayIcon())
+	tray.SetTooltip(appName)
+	tray.OnClick(func() { show("/") })
+	menu := app.NewMenu()
+	// The NFC and scanner watchers update their menu items through onMain,
+	// which needs the app running.
+	var workers []func()
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		for _, run := range workers {
+			go run()
+		}
+	})
 
 	if nfc != nil {
-		mNFC := systray.AddMenuItem("NFC base: looking…", "")
-		mNFC.Disable()
-		nfc.onStatus = mNFC.SetTitle
-		go nfc.Run()
+		mNFC := menu.Add("NFC base: looking…").SetEnabled(false)
+		nfc.onStatus = func(s string) { onMain(func() { mNFC.SetLabel(s) }) }
+		workers = append(workers, nfc.Run)
 	}
 
 	if !strings.EqualFold(cfg.ScannerPort, "off") {
-		mScanner := systray.AddMenuItem("Scanner: looking…", "")
-		mScanner.Disable()
-		systray.AddSeparator()
-		scanners, err := NewScannerManager(launcher, cfg, mScanner.SetTitle)
+		mScanner := menu.Add("Scanner: looking…").SetEnabled(false)
+		menu.AddSeparator()
+		scanners, err := NewScannerManager(launcher, cfg, func(s string) { onMain(func() { mScanner.SetLabel(s) }) })
 		if err != nil {
 			fatal("Bad scanner config: " + err.Error())
 		}
-		go scanners.Run()
+		workers = append(workers, scanners.Run)
 	}
 
-	mOpen := systray.AddMenuItem("Open QR page", "Show the QR codes for your games")
-	mSettings := systray.AddMenuItem("Settings…", "Change ports, scanner, NFC and update settings")
-	mRescan := systray.AddMenuItem("Rescan games", "Re-read the Steam, GOG and Epic libraries")
-	mLog := systray.AddMenuItem("Open log folder", "")
-	systray.AddSeparator()
-	mUpdate := systray.AddMenuItem(updateTitle(), "Download and install a newer version")
-	mStartup := systray.AddMenuItemCheckbox("Start with Windows", "", startupEnabled())
-	systray.AddSeparator()
-	mQuit := systray.AddMenuItem("Quit", "")
-
-	go func() {
-		for {
-			select {
-			case <-mOpen.ClickedCh:
-				shellOpen(pageURL)
-			case <-mSettings.ClickedCh:
-				shellOpen(pageURL + "settings")
-			case <-mRescan.ClickedCh:
-				if err := launcher.Rescan(); err != nil {
-					log.Printf("rescan: %v", err)
-				}
-				go details.FetchMissing(launcher.Apps())
-			case <-mLog.ClickedCh:
-				shellOpen(logDir())
-			case <-mUpdate.ClickedCh:
-				go runUpdateCheck(cfg, mUpdate)
-			case <-mStartup.ClickedCh:
-				if err := setStartup(!mStartup.Checked()); err != nil {
-					log.Printf("start with windows: %v", err)
-				} else if mStartup.Checked() {
-					mStartup.Uncheck()
-				} else {
-					mStartup.Check()
-				}
-			case <-mQuit.ClickedCh:
-				systray.Quit()
-				return
-			}
+	menu.Add("Open QR page").OnClick(func(*application.Context) { show("/") })
+	menu.Add("Settings…").OnClick(func(*application.Context) { show("/settings") })
+	menu.Add("Rescan games").OnClick(func(*application.Context) {
+		if err := launcher.Rescan(); err != nil {
+			log.Printf("rescan: %v", err)
 		}
-	}()
+		go details.FetchMissing(launcher.Apps())
+	})
+	menu.Add("Open log folder").OnClick(func(*application.Context) { shellOpen(logDir()) })
+	menu.AddSeparator()
+	mUpdate := menu.Add(updateTitle())
+	mUpdate.OnClick(func(*application.Context) { runUpdateCheck(app, cfg, mUpdate) })
+	// Wails has already flipped the tick when OnClick runs, so Checked() is
+	// what the user asked for; put it back if the registry change fails.
+	mStartup := menu.AddCheckbox("Start with Windows", startupEnabled())
+	mStartup.OnClick(func(*application.Context) {
+		on := mStartup.Checked()
+		if err := setStartup(on); err != nil {
+			log.Printf("start with windows: %v", err)
+			onMain(func() { mStartup.SetChecked(!on) })
+		}
+	})
+	menu.AddSeparator()
+	menu.Add("Quit").OnClick(func(*application.Context) { app.Quit() })
+	tray.SetMenu(menu)
 }
 
 func startupEnabled() bool {
@@ -184,13 +230,12 @@ func updateTitle() string { return "Check for updates (" + version + ")" }
 
 // runUpdateCheck backs the tray's "Check for updates" item: it asks before
 // installing, then hands over to the new version and quits.
-func runUpdateCheck(cfg Config, item *systray.MenuItem) {
-	item.Disable()
-	item.SetTitle("Checking for updates…")
-	defer func() {
-		item.SetTitle(updateTitle())
-		item.Enable()
-	}()
+func runUpdateCheck(app *application.App, cfg Config, item *application.MenuItem) {
+	setItem := func(label string, enabled bool) {
+		onMain(func() { item.SetLabel(label).SetEnabled(enabled) })
+	}
+	setItem("Checking for updates…", false)
+	defer setItem(updateTitle(), true)
 
 	m, newer, err := checkForUpdate(cfg)
 	if err != nil {
@@ -206,13 +251,13 @@ func runUpdateCheck(cfg Config, item *systray.MenuItem) {
 	if messageBox(msg, windows.MB_YESNO|windows.MB_ICONQUESTION) != idYes {
 		return
 	}
-	item.SetTitle("Updating to " + m.Version + "…")
-	if err := applyUpdate(m); err != nil {
+	setItem("Updating to "+m.Version+"…", false)
+	if err := applyUpdate(m, ""); err != nil {
 		log.Printf("update: %v", err)
 		messageBox("Update failed:\n\n"+err.Error(), windows.MB_OK|windows.MB_ICONERROR)
 		return
 	}
-	systray.Quit()
+	app.Quit()
 }
 
 const idYes = 6

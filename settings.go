@@ -84,7 +84,7 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Print("settings saved; restarting")
-	if _, err := relaunch(); err != nil {
+	if _, err := relaunch("/settings"); err != nil {
 		http.Error(w, "saved, but couldn't restart: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -137,7 +137,7 @@ func (s *Server) updateInstall(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("already on the latest version (%s)", version)
 	}
 	if err == nil {
-		err = applyUpdate(m)
+		err = applyUpdate(m, "/settings")
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
