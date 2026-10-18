@@ -14,15 +14,18 @@
   .card img.cover { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; display: block; background: #2a475e; }
   .card .name { font-weight: 600; padding: 10px 10px 2px; }
   /* The QR code stays hidden until the QR button shows it over the card. */
-  .card .qr { display: none; position: absolute; inset: 0; z-index: 1; background: #fff; align-items: center; justify-content: center; cursor: pointer; }
+  /* Padded clear of the store badge and tool buttons, and scaled to fit the card. */
+  .card .qr { display: none; position: absolute; inset: 0; z-index: 1; box-sizing: border-box; padding: 48px 12px 12px; background: #fff; align-items: center; justify-content: center; cursor: pointer; }
   .card.show-qr .qr { display: flex; }
-  .card .qr svg { width: 180px; height: 180px; display: block; }
+  .card .qr svg { width: auto; height: 100%; max-width: 100%; max-height: 180px; aspect-ratio: 1; display: block; }
+  .card.show-qr .store { display: none; }
   .card .tools { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; gap: 6px; }
   .card .tools button { width: 32px; height: 32px; padding: 6px; border-radius: 99px; background: rgba(15,25,34,.75); display: grid; place-items: center; }
   .card .tools button:hover, .card.show-qr .tools .show-qr { background: #3d6c8d; }
   .card .tools svg { width: 18px; height: 18px; }
   .card.filtered { display: none; }
   .card .store { position: absolute; top: 8px; left: 8px; z-index: 2; padding: 2px 8px; border-radius: 99px; background: #7a3fbf; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+  .card .store.epic { background: #2a2a2a; }
   .card .meta { font-size: 12px; opacity: .65; padding: 0 10px 12px; }
   .card .meta:empty { display: none; }
   .card .desc { display: none; } /* labels only */
@@ -103,6 +106,7 @@
       <option value="all">All</option>
       <option value="steam">Steam</option>
       <option value="gog">GOG</option>
+      <option value="epic">Epic</option>
     </select>
     <button onclick="location.href='/settings'">Settings</button>
   </div>
@@ -149,6 +153,7 @@
       <img class="cover" src="/cover/${id}" data-cdn="${cdn}"
         onerror="if (this.dataset.cdn) { this.src = this.dataset.cdn; this.dataset.cdn = ''; } else this.style.visibility = 'hidden'">
       ${store === "gog" ? `<span class="store" title="GOG game: runs its exe directly">GOG</span>` : ""}
+      ${store === "epic" ? `<span class="store epic" title="Epic game: starts through the Epic Games Launcher">EPIC</span>` : ""}
       <div class="tools">
         <button class="show-qr" title="Show QR code" aria-label="Show QR code">${ICON_QR}</button>
         <button class="print-one" title="Print this card" aria-label="Print this card">${ICON_PRINT}</button>
@@ -218,13 +223,13 @@
     }
   }
 
-  // Store filter: All, Steam or GOG, remembered in this browser.
+  // Store filter: All, Steam, GOG or Epic, remembered in this browser.
   const storeSel = document.getElementById("store");
   for (const opt of storeSel.options) {
     const n = opt.value === "all" ? APPS.length : APPS.filter(a => a.store === opt.value).length;
     opt.textContent += ` (${n})`;
   }
-  try { if (["all", "steam", "gog"].includes(localStorage.getItem("store"))) storeSel.value = localStorage.getItem("store"); } catch {}
+  try { if (["all", "steam", "gog", "epic"].includes(localStorage.getItem("store"))) storeSel.value = localStorage.getItem("store"); } catch {}
   function applyFilter() {
     for (const { id, store } of APPS) cardEls[id].classList.toggle("filtered", storeSel.value !== "all" && store !== storeSel.value);
     try { localStorage.setItem("store", storeSel.value); } catch {}

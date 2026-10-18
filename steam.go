@@ -16,9 +16,12 @@ const defaultSteamPath = `C:\Program Files (x86)\Steam`
 type App struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
-	Store string `json:"store"` // "steam" or "gog"
+	Store string `json:"store"` // "steam", "gog" or "epic"
 
-	exe, args, dir string // GOG: the game's own exe, run directly
+	exe, args, dir string // GOG: the game's own exe, run directly; Epic: its launcher URL
+	home           string // GOG, Epic: install folder, to find the game's window
+	catalogNS      string // Epic: catalog namespace and item ID, for details and art
+	catalogID      string
 }
 
 var (

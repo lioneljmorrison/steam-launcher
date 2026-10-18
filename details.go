@@ -25,7 +25,7 @@ type Details struct {
 	Tags        []string `json:"tags,omitempty"` // popular user-defined tags, most votes first
 	Description string   `json:"description,omitempty"`
 	// Art maps an artwork kind (capsule, header, hero, logo) to an image URL,
-	// for stores whose art the server can't find locally (GOG).
+	// for stores whose art the server can't find locally (GOG, Epic).
 	Art     map[string]string `json:"art,omitempty"`
 	Version int               `json:"v,omitempty"`
 }
@@ -79,7 +79,7 @@ func (s *DetailsStore) FetchMissing(apps []App) {
 		if have && (d == nil || d.Version >= detailsVersion) {
 			continue
 		}
-		d, err := s.fetch(a.ID)
+		d, err := s.fetch(a)
 		if err != nil {
 			log.Printf("details for %s: %v", a.Name, err)
 			continue // offline or rate limited; try again next start
@@ -96,10 +96,14 @@ func (s *DetailsStore) FetchMissing(apps []App) {
 	}
 }
 
-func (s *DetailsStore) fetch(appID string) (*Details, error) {
-	if isGOG(appID) {
-		return s.fetchGOG(strings.TrimPrefix(appID, gogPrefix))
+func (s *DetailsStore) fetch(a App) (*Details, error) {
+	switch a.Store {
+	case "gog":
+		return s.fetchGOG(strings.TrimPrefix(a.ID, gogPrefix))
+	case "epic":
+		return s.fetchEpic(a.catalogNS, a.catalogID)
 	}
+	appID := a.ID
 	resp, err := s.client.Get("https://store.steampowered.com/api/appdetails?l=english&cc=us&appids=" + appID)
 	if err != nil {
 		return nil, err

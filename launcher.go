@@ -24,18 +24,19 @@ func NewLauncher() *Launcher {
 	return &Launcher{lastLaunch: map[string]time.Time{}}
 }
 
-// Rescan reads the Steam and GOG libraries. It fails only when neither can
-// be read, so a PC with just one of them still works.
+// Rescan reads the Steam, GOG and Epic libraries. It fails only when none
+// can be read, so a PC with just one of them still works.
 func (l *Launcher) Rescan() error {
 	steam, steamErr := installedApps()
 	gog, gogErr := installedGOGApps()
-	if steamErr != nil && gogErr != nil {
+	epic, epicErr := installedEpicApps()
+	if steamErr != nil && gogErr != nil && epicErr != nil {
 		return steamErr
 	}
 	if steamErr != nil {
 		log.Printf("steam library: %v", steamErr)
 	}
-	apps := append(steam, gog...)
+	apps := append(append(steam, gog...), epic...)
 	sortApps(apps)
 	byID := make(map[string]App, len(apps))
 	for _, a := range apps {
@@ -44,7 +45,7 @@ func (l *Launcher) Rescan() error {
 	l.mu.Lock()
 	l.apps, l.byID = apps, byID
 	l.mu.Unlock()
-	log.Printf("found %d installed apps (%d Steam, %d GOG)", len(apps), len(steam), len(gog))
+	log.Printf("found %d installed apps (%d Steam, %d GOG, %d Epic)", len(apps), len(steam), len(gog), len(epic))
 	return nil
 }
 
@@ -79,9 +80,14 @@ func (l *Launcher) Launch(appID, source string) (string, LaunchResult, error) {
 
 	log.Printf("launching %s (%s) via %s", name, appID, source)
 	var err error
-	if app.Store == "gog" {
+	switch app.Store {
+	case "gog":
 		err = shellRun(app.exe, app.args, app.dir)
-	} else {
+		bringToFront(app.home)
+	case "epic":
+		err = shellOpen(app.exe)
+		bringToFront(app.home)
+	default:
 		err = shellOpen("steam://rungameid/" + appID)
 	}
 	if err != nil {
@@ -91,13 +97,13 @@ func (l *Launcher) Launch(appID, source string) (string, LaunchResult, error) {
 }
 
 var (
-	scanURLRe   = regexp.MustCompile(`/launch/((?:gog-)?\d+)`)
+	scanURLRe   = regexp.MustCompile(`/launch/((?:gog-)?\d+|epic-[\w.-]+)`)
 	scanSteamRe = regexp.MustCompile(`^steam://rungameid/(\d+)`)
-	scanBareRe  = regexp.MustCompile(`^(?:gog-)?\d+$`)
+	scanBareRe  = regexp.MustCompile(`^(?:(?:gog-)?\d+|epic-[\w.-]+)$`)
 )
 
 // parseScan pulls an appid out of scanned text: the phone launch URL,
-// a steam://rungameid URL, or a bare appid (digits, or gog-<digits>).
+// a steam://rungameid URL, or a bare appid (digits, gog-<digits> or epic-<name>).
 func parseScan(text string) (string, bool) {
 	text = strings.TrimSpace(text)
 	if m := scanURLRe.FindStringSubmatch(text); m != nil {

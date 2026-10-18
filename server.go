@@ -92,7 +92,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 }
 
 // art serves cached Steam artwork: /art/{appid}/{capsule|header|hero|logo}
-// (/cover/{appid} is the header). GOG art redirects to GOG's image CDN.
+// (/cover/{appid} is the header). GOG and Epic art redirects to their image CDNs.
 func (s *Server) art(w http.ResponseWriter, r *http.Request) {
 	if !isLoopback(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -102,7 +102,7 @@ func (s *Server) art(w http.ResponseWriter, r *http.Request) {
 	if kind == "" {
 		kind = "header"
 	}
-	if isGOG(appID) {
+	if isGOG(appID) || isEpic(appID) {
 		if d := s.details.Get(appID); d != nil && d.Art[kind] != "" {
 			http.Redirect(w, r, d.Art[kind], http.StatusFound)
 			return

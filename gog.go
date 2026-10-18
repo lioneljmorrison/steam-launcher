@@ -47,8 +47,8 @@ func installedGOGApps() ([]App, error) {
 			k.Close()
 			continue
 		}
-		a := App{ID: gogPrefix + id, Name: val("gameName"), Store: "gog"}
 		dir := val("path")
+		a := App{ID: gogPrefix + id, Name: val("gameName"), Store: "gog", home: dir}
 		a.exe, a.args, a.dir = gogPlayTask(dir, id)
 		if a.exe == "" {
 			a.exe, a.args, a.dir = val("exe"), val("launchParam"), val("workingDir")

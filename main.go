@@ -44,7 +44,7 @@ func main() {
 	}
 	launcher := NewLauncher()
 	if err := launcher.Rescan(); err != nil {
-		fatal("Couldn't read the Steam or GOG library: " + err.Error())
+		fatal("Couldn't read the Steam, GOG or Epic library: " + err.Error())
 	}
 
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(cfg.Port))
@@ -98,7 +98,7 @@ func onReady(cfg Config, launcher *Launcher, details *DetailsStore, nfc *NFCMana
 
 	mOpen := systray.AddMenuItem("Open QR page", "Show the QR codes for your games")
 	mSettings := systray.AddMenuItem("Settings…", "Change ports, scanner, NFC and update settings")
-	mRescan := systray.AddMenuItem("Rescan games", "Re-read the Steam and GOG libraries")
+	mRescan := systray.AddMenuItem("Rescan games", "Re-read the Steam, GOG and Epic libraries")
 	mLog := systray.AddMenuItem("Open log folder", "")
 	systray.AddSeparator()
 	mUpdate := systray.AddMenuItem(updateTitle(), "Download and install a newer version")
