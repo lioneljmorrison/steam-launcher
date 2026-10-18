@@ -16,7 +16,7 @@ const debounce = 10 * time.Second
 type Launcher struct {
 	mu         sync.Mutex
 	apps       []App
-	byID       map[string]string
+	byID       map[string]App
 	lastLaunch map[string]time.Time
 }
 
@@ -24,19 +24,27 @@ func NewLauncher() *Launcher {
 	return &Launcher{lastLaunch: map[string]time.Time{}}
 }
 
+// Rescan reads the Steam and GOG libraries. It fails only when neither can
+// be read, so a PC with just one of them still works.
 func (l *Launcher) Rescan() error {
-	apps, err := installedApps()
-	if err != nil {
-		return err
+	steam, steamErr := installedApps()
+	gog, gogErr := installedGOGApps()
+	if steamErr != nil && gogErr != nil {
+		return steamErr
 	}
-	byID := make(map[string]string, len(apps))
+	if steamErr != nil {
+		log.Printf("steam library: %v", steamErr)
+	}
+	apps := append(steam, gog...)
+	sortApps(apps)
+	byID := make(map[string]App, len(apps))
 	for _, a := range apps {
-		byID[a.ID] = a.Name
+		byID[a.ID] = a
 	}
 	l.mu.Lock()
 	l.apps, l.byID = apps, byID
 	l.mu.Unlock()
-	log.Printf("found %d installed apps", len(apps))
+	log.Printf("found %d installed apps (%d Steam, %d GOG)", len(apps), len(steam), len(gog))
 	return nil
 }
 
@@ -56,7 +64,8 @@ const (
 
 func (l *Launcher) Launch(appID, source string) (string, LaunchResult, error) {
 	l.mu.Lock()
-	name, ok := l.byID[appID]
+	app, ok := l.byID[appID]
+	name := app.Name
 	if !ok {
 		l.mu.Unlock()
 		return "", NotInstalled, nil
@@ -69,20 +78,26 @@ func (l *Launcher) Launch(appID, source string) (string, LaunchResult, error) {
 	l.mu.Unlock()
 
 	log.Printf("launching %s (%s) via %s", name, appID, source)
-	if err := shellOpen("steam://rungameid/" + appID); err != nil {
+	var err error
+	if app.Store == "gog" {
+		err = shellRun(app.exe, app.args, app.dir)
+	} else {
+		err = shellOpen("steam://rungameid/" + appID)
+	}
+	if err != nil {
 		return name, Launched, fmt.Errorf("launch %s: %w", appID, err)
 	}
 	return name, Launched, nil
 }
 
 var (
-	scanURLRe   = regexp.MustCompile(`/launch/(\d+)`)
+	scanURLRe   = regexp.MustCompile(`/launch/((?:gog-)?\d+)`)
 	scanSteamRe = regexp.MustCompile(`^steam://rungameid/(\d+)`)
-	scanBareRe  = regexp.MustCompile(`^\d+$`)
+	scanBareRe  = regexp.MustCompile(`^(?:gog-)?\d+$`)
 )
 
 // parseScan pulls an appid out of scanned text: the phone launch URL,
-// a steam://rungameid URL, or bare digits.
+// a steam://rungameid URL, or a bare appid (digits, or gog-<digits>).
 func parseScan(text string) (string, bool) {
 	text = strings.TrimSpace(text)
 	if m := scanURLRe.FindStringSubmatch(text); m != nil {

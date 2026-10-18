@@ -21,6 +21,8 @@
   .card .tools button { width: 32px; height: 32px; padding: 6px; border-radius: 99px; background: rgba(15,25,34,.75); display: grid; place-items: center; }
   .card .tools button:hover, .card.show-qr .tools .show-qr { background: #3d6c8d; }
   .card .tools svg { width: 18px; height: 18px; }
+  .card.filtered { display: none; }
+  .card .store { position: absolute; top: 8px; left: 8px; z-index: 2; padding: 2px 8px; border-radius: 99px; background: #7a3fbf; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
   .card .meta { font-size: 12px; opacity: .65; padding: 0 10px 12px; }
   .card .meta:empty { display: none; }
   .card .desc { display: none; } /* labels only */
@@ -97,6 +99,11 @@
     <p class="sub">Scan with your phone camera on the same Wi-Fi, or with a scanner on this PC. Codes point at {{.Base}}</p>
   </div>
   <div class="header-actions">
+    <select id="store" aria-label="Show games from" title="Show games from">
+      <option value="all">All</option>
+      <option value="steam">Steam</option>
+      <option value="gog">GOG</option>
+    </select>
     <button onclick="location.href='/settings'">Settings</button>
   </div>
 </header>
@@ -112,7 +119,7 @@
   <label id="qrLabel" title="Include the QR code on side B"><input type="checkbox" id="showQR" checked> QR code on side B</label>
   <label id="oneSheetLabel" title="Print each card's side A and side B next to each other on one sheet, for printers without double-sided printing. Cut them out and glue them back to back."><input type="checkbox" id="oneSheet"> A and B on one sheet</label>
   <label title="Round the card corners; otherwise they print square"><input type="checkbox" id="rounded"> Rounded corners</label>
-  <button id="print" title="Print at 100% scale with margins set to None or Default">Print cards</button>
+  <button id="print" title="Print the games shown, at 100% scale with margins set to None or Default">Print cards</button>
 </section>
 <div class="grid" id="grid"></div>
 <div id="print-root"></div>
@@ -129,16 +136,19 @@
   const ICON_QR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20v.01M17 20h4v-3"/></svg>`;
   const ICON_PRINT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="6" y="14" width="12" height="7"/></svg>`;
 
-  for (const { id, name } of APPS) {
+  for (const { id, name, store } of APPS) {
     const url = `${BASE}/launch/${id}?k=${encodeURIComponent(KEY)}`;
     const qr = qrcode(0, "M");
     qr.addData(url);
     qr.make();
     const card = document.createElement("div");
     card.className = "card";
+    card.dataset.store = store;
+    const cdn = store === "steam" ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg` : "";
     card.innerHTML = `
-      <img class="cover" src="/cover/${id}" data-cdn="https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg"
+      <img class="cover" src="/cover/${id}" data-cdn="${cdn}"
         onerror="if (this.dataset.cdn) { this.src = this.dataset.cdn; this.dataset.cdn = ''; } else this.style.visibility = 'hidden'">
+      ${store === "gog" ? `<span class="store" title="GOG game: runs its exe directly">GOG</span>` : ""}
       <div class="tools">
         <button class="show-qr" title="Show QR code" aria-label="Show QR code">${ICON_QR}</button>
         <button class="print-one" title="Print this card" aria-label="Print this card">${ICON_PRINT}</button>
@@ -208,6 +218,21 @@
     }
   }
 
+  // Store filter: All, Steam or GOG, remembered in this browser.
+  const storeSel = document.getElementById("store");
+  for (const opt of storeSel.options) {
+    const n = opt.value === "all" ? APPS.length : APPS.filter(a => a.store === opt.value).length;
+    opt.textContent += ` (${n})`;
+  }
+  try { if (["all", "steam", "gog"].includes(localStorage.getItem("store"))) storeSel.value = localStorage.getItem("store"); } catch {}
+  function applyFilter() {
+    for (const { id, store } of APPS) cardEls[id].classList.toggle("filtered", storeSel.value !== "all" && store !== storeSel.value);
+    try { localStorage.setItem("store", storeSel.value); } catch {}
+  }
+  storeSel.addEventListener("change", applyFilter);
+  applyFilter();
+  const shownApps = () => APPS.filter(({ id }) => !cardEls[id].classList.contains("filtered"));
+
   // Print templates. card is the cell on the stock; rotate turns portrait
   // cards to fit landscape cells. All sizes are what the stock measures; Avery lists
   // 28877 as using the same layout as 5371 (2 × 5, 0.5in top, 0.75in sides).
@@ -274,17 +299,19 @@
     const art = document.createElement("img");
     art.className = "hero";
     pc.append(art);
+    // Steam art falls back to Steam's CDN; GOG art only comes via /art (a redirect to GOG's CDN).
     const CDN = `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}`;
+    const cdn = (...files) => el.dataset.store === "steam" ? files.map(f => `${CDN}/${f}`) : [];
     waits.push((async () => {
-      if (await loadImg(art, `/art/${id}/capsule`, `${CDN}/library_600x900_2x.jpg`, `${CDN}/library_600x900.jpg`)) return;
+      if (await loadImg(art, `/art/${id}/capsule`, ...cdn("library_600x900_2x.jpg", "library_600x900.jpg"))) return;
       const hero = document.createElement("img");
       hero.className = "hero";
       pc.append(hero);
-      if (!await loadImg(hero, `/art/${id}/hero`, `${CDN}/library_hero.jpg`, `/art/${id}/header`, el.querySelector("img.cover").currentSrc)) return;
+      if (!await loadImg(hero, `/art/${id}/hero`, ...cdn("library_hero.jpg"), `/art/${id}/header`, el.querySelector("img.cover").currentSrc)) return;
       const logo = document.createElement("img");
       logo.className = "logo";
       pc.append(logo);
-      if (!await loadImg(logo, `/art/${id}/logo`, `${CDN}/logo.png`)) pc.append(div("title", el.querySelector(".name").textContent));
+      if (!await loadImg(logo, `/art/${id}/logo`, ...cdn("logo.png"))) pc.append(div("title", el.querySelector(".name").textContent));
     })());
     return pc;
   }
@@ -346,7 +373,7 @@
   // Builds the sheets for the chosen template and sides. With both sides,
   // each side A sheet is followed by its side B, mirrored left-to-right so
   // cards line up when the printer flips on the long edge.
-  function buildPrint(apps = APPS) {
+  function buildPrint(apps = shownApps()) {
     const t = TEMPLATES[$("template").value];
     const sides = $("sides").value;
     const opts = { qr: $("showQR").checked };
@@ -390,7 +417,7 @@
     button.disabled = true;
     try { await buildPrint(apps); window.print(); } finally { button.disabled = false; }
   }
-  $("print").addEventListener("click", () => printCards(APPS, $("print")));
+  $("print").addEventListener("click", () => printCards(shownApps(), $("print")));
   window.addEventListener("beforeprint", () => { if (!$("print-root").children.length) buildPrint(); });
   window.addEventListener("afterprint", () => $("print-root").replaceChildren());
 

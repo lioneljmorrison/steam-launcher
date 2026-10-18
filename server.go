@@ -91,8 +91,8 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// art serves cached Steam artwork: /art/{appid}/{header|hero|logo}
-// (/cover/{appid} is the header).
+// art serves cached Steam artwork: /art/{appid}/{capsule|header|hero|logo}
+// (/cover/{appid} is the header). GOG art redirects to GOG's image CDN.
 func (s *Server) art(w http.ResponseWriter, r *http.Request) {
 	if !isLoopback(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -101,6 +101,14 @@ func (s *Server) art(w http.ResponseWriter, r *http.Request) {
 	appID, kind := r.PathValue("appid"), r.PathValue("kind")
 	if kind == "" {
 		kind = "header"
+	}
+	if isGOG(appID) {
+		if d := s.details.Get(appID); d != nil && d.Art[kind] != "" {
+			http.Redirect(w, r, d.Art[kind], http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+		return
 	}
 	if _, err := strconv.Atoi(appID); err != nil || artFiles[kind] == nil {
 		http.NotFound(w, r)
@@ -200,7 +208,7 @@ func (s *Server) launch(w http.ResponseWriter, r *http.Request) {
 		result(w, http.StatusNotFound, "Not installed", "App "+appID+" is not installed on this PC.")
 	case err != nil:
 		log.Print(err)
-		result(w, http.StatusInternalServerError, name, "Couldn't start Steam.")
+		result(w, http.StatusInternalServerError, name, "Couldn't start the game.")
 	case res == AlreadyLaunching:
 		result(w, http.StatusOK, name, "Already launching.")
 	default:

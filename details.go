@@ -24,7 +24,10 @@ type Details struct {
 	Genres      []string `json:"genres,omitempty"`
 	Tags        []string `json:"tags,omitempty"` // popular user-defined tags, most votes first
 	Description string   `json:"description,omitempty"`
-	Version     int      `json:"v,omitempty"`
+	// Art maps an artwork kind (capsule, header, hero, logo) to an image URL,
+	// for stores whose art the server can't find locally (GOG).
+	Art     map[string]string `json:"art,omitempty"`
+	Version int               `json:"v,omitempty"`
 }
 
 // detailsVersion is bumped when Details gains fields, so cached entries are fetched again.
@@ -94,6 +97,9 @@ func (s *DetailsStore) FetchMissing(apps []App) {
 }
 
 func (s *DetailsStore) fetch(appID string) (*Details, error) {
+	if isGOG(appID) {
+		return s.fetchGOG(strings.TrimPrefix(appID, gogPrefix))
+	}
 	resp, err := s.client.Get("https://store.steampowered.com/api/appdetails?l=english&cc=us&appids=" + appID)
 	if err != nil {
 		return nil, err
@@ -183,4 +189,91 @@ func (s *DetailsStore) save() {
 	if err == nil {
 		os.WriteFile(s.path, b, 0o644)
 	}
+}
+
+var htmlTagRe = regexp.MustCompile(`<[^>]*>`)
+
+// gogImage is GOG's image CDN: an image hash plus a size formatter.
+const gogImage = "https://images.gog-statics.com/"
+
+var gogHashRe = regexp.MustCompile(`images\.gog-statics\.com/([0-9a-f]{64})`)
+
+// fetchGOG reads a game's details and art from GOG's public catalog API.
+func (s *DetailsStore) fetchGOG(id string) (*Details, error) {
+	resp, err := s.client.Get("https://api.gog.com/v2/games/" + id + "?locale=en-US")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil // not in the catalog; cached as nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("gog api returned %s", resp.Status)
+	}
+	type link struct{ Href string }
+	var body struct {
+		Overview string `json:"overview"`
+		Links    struct {
+			Logo, BoxArtImage, GalaxyBackgroundImage link
+		} `json:"_links"`
+		Embedded struct {
+			Product struct {
+				GlobalReleaseDate string               `json:"globalReleaseDate"`
+				GogReleaseDate    string               `json:"gogReleaseDate"`
+				Links             struct{ Image link } `json:"_links"`
+			} `json:"product"`
+			Developers []struct{ Name string } `json:"developers"`
+			Publisher  struct{ Name string }   `json:"publisher"`
+			Tags       []struct{ Name string } `json:"tags"`
+		} `json:"_embedded"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, err
+	}
+	e := body.Embedded
+	d := &Details{
+		Publisher:   e.Publisher.Name,
+		Year:        yearRe.FindString(e.Product.GlobalReleaseDate + " " + e.Product.GogReleaseDate),
+		Description: gogDescription(body.Overview),
+		Art:         map[string]string{},
+		Version:     detailsVersion,
+	}
+	if len(e.Developers) > 0 {
+		d.Developer = e.Developers[0].Name
+	}
+	// GOG's tags are its genres, broadest first.
+	for _, t := range e.Tags[:min(len(e.Tags), maxTags)] {
+		d.Genres = append(d.Genres, t.Name)
+	}
+	art := func(kind string, l link, formatter string) {
+		if m := gogHashRe.FindStringSubmatch(l.Href); m != nil {
+			d.Art[kind] = gogImage + m[1] + formatter
+		}
+	}
+	art("capsule", body.Links.BoxArtImage, "_glx_vertical_cover.jpg")
+	art("header", e.Product.Links.Image, "_product_630.jpg")
+	art("hero", body.Links.GalaxyBackgroundImage, ".jpg")
+	art("logo", body.Links.Logo, ".png")
+	return d, nil
+}
+
+// gogDescription turns the HTML overview into plain text, cut to its first
+// paragraph or so, like the Steam short description.
+func gogDescription(overview string) string {
+	text := html.UnescapeString(htmlTagRe.ReplaceAllString(overview, "\n"))
+	var paras []string
+	for _, p := range strings.Split(text, "\n") {
+		if p = strings.Join(strings.Fields(p), " "); p != "" {
+			paras = append(paras, p)
+		}
+	}
+	desc := ""
+	for _, p := range paras {
+		if desc != "" && len(desc)+len(p) > 300 {
+			break
+		}
+		desc = strings.TrimSpace(desc + " " + p)
+	}
+	return desc
 }

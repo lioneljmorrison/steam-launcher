@@ -14,8 +14,11 @@ import (
 const defaultSteamPath = `C:\Program Files (x86)\Steam`
 
 type App struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Store string `json:"store"` // "steam" or "gog"
+
+	exe, args, dir string // GOG: the game's own exe, run directly
 }
 
 var (
@@ -37,7 +40,7 @@ func steamRoot() string {
 	return filepath.Clean(p)
 }
 
-// installedApps reads every Steam library's app manifests, sorted by name.
+// installedApps reads every Steam library's app manifests.
 func installedApps() ([]App, error) {
 	vdf, err := os.ReadFile(filepath.Join(steamRoot(), "steamapps", "libraryfolders.vdf"))
 	if err != nil {
@@ -60,10 +63,13 @@ func installedApps() ([]App, error) {
 	}
 	apps := make([]App, 0, len(seen))
 	for id, name := range seen {
-		apps = append(apps, App{ID: id, Name: name})
+		apps = append(apps, App{ID: id, Name: name, Store: "steam"})
 	}
-	sort.Slice(apps, func(i, j int) bool { return strings.ToLower(apps[i].Name) < strings.ToLower(apps[j].Name) })
 	return apps, nil
+}
+
+func sortApps(apps []App) {
+	sort.Slice(apps, func(i, j int) bool { return strings.ToLower(apps[i].Name) < strings.ToLower(apps[j].Name) })
 }
 
 // artFiles maps an artwork kind to the file names the Steam client caches it as.
