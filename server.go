@@ -41,6 +41,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /cover/{appid}", s.art)
 	mux.HandleFunc("GET /art/{appid}/{kind}", s.art)
 	mux.HandleFunc("GET /settings", s.settingsPage)
+	mux.HandleFunc("POST /api/launch/{appid}", s.localAPI(s.launchLocal))
 	mux.HandleFunc("GET /api/settings", s.localAPI(s.getSettings))
 	mux.HandleFunc("POST /api/settings", s.localAPI(s.saveSettings))
 	mux.HandleFunc("POST /api/update/check", s.localAPI(s.updateCheck))
@@ -213,6 +214,22 @@ func (s *Server) launch(w http.ResponseWriter, r *http.Request) {
 		result(w, http.StatusOK, name, "Already launching.")
 	default:
 		result(w, http.StatusOK, name, "Launching on your PC…")
+	}
+}
+
+// launchLocal backs the play buttons on this PC's own page.
+func (s *Server) launchLocal(w http.ResponseWriter, r *http.Request) {
+	name, res, err := s.launcher.Launch(r.PathValue("appid"), "this PC")
+	switch {
+	case res == NotInstalled:
+		http.Error(w, "That game isn't installed on this PC.", http.StatusNotFound)
+	case err != nil:
+		log.Print(err)
+		http.Error(w, "Couldn't start "+name+".", http.StatusInternalServerError)
+	case res == AlreadyLaunching:
+		writeJSON(w, map[string]string{"message": name + " is already launching."})
+	default:
+		writeJSON(w, map[string]string{"message": "Launching " + name + "…"})
 	}
 }
 
