@@ -68,9 +68,10 @@ func installedApps() ([]App, error) {
 
 // artFiles maps an artwork kind to the file names the Steam client caches it as.
 var artFiles = map[string][]string{
-	"header": {"library_header.jpg", "header.jpg"},
-	"hero":   {"library_hero.jpg"},
-	"logo":   {"logo.png"},
+	"capsule": {"library_600x900_2x.jpg", "library_600x900.jpg"}, // portrait library art
+	"header":  {"library_header.jpg", "header.jpg"},
+	"hero":    {"library_hero.jpg"},
+	"logo":    {"logo.png"},
 }
 
 // artPath finds the Steam client's cached artwork for an app. Newer apps keep

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -18,10 +19,19 @@ import (
 // %LOCALAPPDATA%\steam-launcher\details.json.
 type Details struct {
 	Developer   string   `json:"developer,omitempty"`
+	Publisher   string   `json:"publisher,omitempty"`
 	Year        string   `json:"year,omitempty"`
 	Genres      []string `json:"genres,omitempty"`
+	Tags        []string `json:"tags,omitempty"` // popular user-defined tags, most votes first
 	Description string   `json:"description,omitempty"`
+	Version     int      `json:"v,omitempty"`
 }
+
+// detailsVersion is bumped when Details gains fields, so cached entries are fetched again.
+const (
+	detailsVersion = 2
+	maxTags        = 5
+)
 
 // DetailsStore fetches details from the Steam store once per app and keeps them.
 type DetailsStore struct {
@@ -31,7 +41,11 @@ type DetailsStore struct {
 	client  *http.Client
 }
 
-var yearRe = regexp.MustCompile(`\b(19|20)\d\d\b`)
+var (
+	yearRe = regexp.MustCompile(`\b(19|20)\d\d\b`)
+	// The store page passes the app's tags to its tag dialog as JSON.
+	tagsRe = regexp.MustCompile(`InitAppTagModal\(\s*\d+,\s*(\[.*?\])\s*,`)
+)
 
 func LoadDetails() *DetailsStore {
 	s := &DetailsStore{
@@ -57,9 +71,9 @@ func (s *DetailsStore) FetchMissing(apps []App) {
 	fetched := 0
 	for _, a := range apps {
 		s.mu.Lock()
-		_, have := s.details[a.ID]
+		d, have := s.details[a.ID]
 		s.mu.Unlock()
-		if have {
+		if have && (d == nil || d.Version >= detailsVersion) {
 			continue
 		}
 		d, err := s.fetch(a.ID)
@@ -92,6 +106,7 @@ func (s *DetailsStore) fetch(appID string) (*Details, error) {
 		Success bool `json:"success"`
 		Data    struct {
 			Developers  []string                       `json:"developers"`
+			Publishers  []string                       `json:"publishers"`
 			Genres      []struct{ Description string } `json:"genres"`
 			ReleaseDate struct{ Date string }          `json:"release_date"`
 			ShortDesc   string                         `json:"short_description"`
@@ -111,10 +126,54 @@ func (s *DetailsStore) fetch(appID string) (*Details, error) {
 	if len(entry.Data.Developers) > 0 {
 		d.Developer = entry.Data.Developers[0]
 	}
+	if len(entry.Data.Publishers) > 0 {
+		d.Publisher = entry.Data.Publishers[0]
+	}
 	for _, g := range entry.Data.Genres {
 		d.Genres = append(d.Genres, g.Description)
 	}
+	d.Tags, err = s.fetchTags(appID)
+	if err != nil {
+		return nil, fmt.Errorf("tags: %w", err)
+	}
+	d.Version = detailsVersion
 	return d, nil
+}
+
+// fetchTags reads the popular user-defined tags from the app's store page,
+// which isn't in the appdetails API.
+func (s *DetailsStore) fetchTags(appID string) ([]string, error) {
+	req, err := http.NewRequest("GET", "https://store.steampowered.com/app/"+appID+"/?l=english", nil)
+	if err != nil {
+		return nil, err
+	}
+	// Skip the age check on mature games.
+	req.Header.Set("Cookie", "birthtime=0; lastagecheckage=1-0-1900; wants_mature_content=1")
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("store page returned %s", resp.Status)
+	}
+	page, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	m := tagsRe.FindSubmatch(page)
+	if m == nil {
+		return nil, nil
+	}
+	var tags []struct{ Name string }
+	if err := json.Unmarshal(m[1], &tags); err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, t := range tags[:min(len(tags), maxTags)] {
+		names = append(names, t.Name)
+	}
+	return names, nil
 }
 
 func (s *DetailsStore) save() {
