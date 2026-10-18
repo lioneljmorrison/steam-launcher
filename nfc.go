@@ -14,6 +14,12 @@ import (
 const (
 	nfcRetryInterval = 3 * time.Second
 	pendingTimeout   = 2 * time.Minute
+	// The base loses power when the PC sleeps and wakes up inactive, but the
+	// HID handle often survives, so reads just stop. Every heartbeat we ping
+	// the base, and reconnect when it stops replying or the wall clock shows
+	// the PC was asleep.
+	heartbeatInterval = 5 * time.Second
+	sleepGap          = 30 * time.Second
 )
 
 type rgb struct{ r, g, b byte }
@@ -91,9 +97,34 @@ func (m *NFCManager) serve(base *infinity.Base) error {
 	m.onStatus("NFC base: connected")
 	setColor(base, infinity.PadAll, colorOff)
 
+	heartbeat := time.NewTicker(heartbeatInterval)
+	defer heartbeat.Stop()
+	lastBeat := time.Now().Round(0) // wall clock, which jumps across sleep
+	pings, pingedOK := true, false
+
 	removed := map[byte]string{} // event index -> uid, to clear lights and state on removal
 	for {
 		select {
+		case <-heartbeat.C:
+			now := time.Now().Round(0)
+			if gap := now.Sub(lastBeat); gap > sleepGap {
+				log.Printf("nfc: no heartbeat for %s (PC asleep?); reconnecting", gap.Round(time.Second))
+				return nil
+			}
+			lastBeat = now
+			if !pings {
+				continue
+			}
+			if err := base.Ping(); err != nil {
+				if !pingedOK {
+					// This base never answered a ping; rely on sleep detection alone.
+					log.Printf("nfc: base doesn't answer pings (%v); heartbeat off", err)
+					pings = false
+					continue
+				}
+				return fmt.Errorf("heartbeat: %w", err)
+			}
+			pingedOK = true
 		case ev := <-base.Events:
 			if !ev.Added {
 				m.mu.Lock()

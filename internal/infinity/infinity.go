@@ -22,6 +22,7 @@ var hidInterfaceGUID = windows.GUID{Data1: 0x4D1E55B2, Data2: 0xF16F, Data3: 0x1
 const (
 	cmdActivate = 0x80
 	cmdSetColor = 0x90
+	cmdPresent  = 0xA1
 	cmdTagUID   = 0xB4
 
 	reportLen = 33 // report ID + 32 bytes
@@ -127,6 +128,13 @@ func (b *Base) TagUID(index byte) ([]byte, error) {
 		return nil, fmt.Errorf("tag uid: unexpected reply % x", r)
 	}
 	return append([]byte(nil), r[4:11]...), nil
+}
+
+// Ping asks the base which tags it holds and discards the answer. It fails
+// when the base stops replying.
+func (b *Base) Ping() error {
+	_, err := b.send(cmdPresent)
+	return err
 }
 
 func (b *Base) SetColor(pad, r, g, bl byte) error {
