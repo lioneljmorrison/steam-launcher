@@ -68,6 +68,9 @@ func main() {
 		srv.nfc = NewNFCManager(launcher, cards, nil)
 	}
 	go func() { log.Fatal(http.Serve(ln, srv.Handler())) }()
+	if !strings.EqualFold(cfg.DriveLaunch, "off") {
+		go watchDrives(launcher)
+	}
 	log.Printf("serving on :%d, codes point at %s", cfg.Port, srv.base)
 
 	app = application.New(application.Options{

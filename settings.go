@@ -107,6 +107,8 @@ func validateConfig(cfg *Config) error {
 		return fmt.Errorf("baud rate must be positive")
 	case cfg.NFCBase != "" && cfg.NFCBase != "off":
 		return fmt.Errorf(`NFC base must be "" or "off"`)
+	case cfg.DriveLaunch != "" && cfg.DriveLaunch != "off":
+		return fmt.Errorf(`drive launch must be "" or "off"`)
 	case cfg.UpdateChannel != channelStable && cfg.UpdateChannel != channelBeta:
 		return fmt.Errorf(`update channel must be "" (stable) or "beta"`)
 	}

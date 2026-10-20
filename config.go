@@ -23,6 +23,7 @@ type Config struct {
 	ScannerBaud  int    `json:"scannerBaud"`
 	ScannerMatch string `json:"scannerMatch"` // regexp for auto-detected Bluetooth device names
 	NFCBase      string `json:"nfcBase"`      // "off" disables the Disney Infinity base
+	DriveLaunch  string `json:"driveLaunch"`  // "off" stops launching the game on a drive when it's plugged in
 	// UpdateChannel is "" for stable releases or "beta" to include pre-releases.
 	UpdateChannel string `json:"updateChannel"`
 	UpdateURL     string `json:"updateURL"` // custom latest.json; empty uses GitHub releases for the channel

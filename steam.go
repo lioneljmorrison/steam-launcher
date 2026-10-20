@@ -45,23 +45,14 @@ func steamRoot() string {
 
 // installedApps reads every Steam library's app manifests.
 func installedApps() ([]App, error) {
-	vdf, err := os.ReadFile(filepath.Join(steamRoot(), "steamapps", "libraryfolders.vdf"))
+	libs, err := steamLibraries()
 	if err != nil {
 		return nil, err
 	}
 	seen := map[string]string{}
-	for _, m := range vdfPathRe.FindAllStringSubmatch(string(vdf), -1) {
-		lib := strings.ReplaceAll(m[1], `\\`, `\`)
-		manifests, _ := filepath.Glob(filepath.Join(lib, "steamapps", "appmanifest_*.acf"))
-		for _, acf := range manifests {
-			b, err := os.ReadFile(acf)
-			if err != nil {
-				continue
-			}
-			id, name := acfIDRe.FindSubmatch(b), acfNameRe.FindSubmatch(b)
-			if id != nil && name != nil {
-				seen[string(id[1])] = string(name[1])
-			}
+	for _, lib := range libs {
+		for id, name := range libraryApps(lib) {
+			seen[id] = name
 		}
 	}
 	apps := make([]App, 0, len(seen))
@@ -69,6 +60,37 @@ func installedApps() ([]App, error) {
 		apps = append(apps, App{ID: id, Name: name, Store: "steam"})
 	}
 	return apps, nil
+}
+
+// steamLibraries lists the library folders Steam knows about, including ones
+// on drives that aren't plugged in right now.
+func steamLibraries() ([]string, error) {
+	vdf, err := os.ReadFile(filepath.Join(steamRoot(), "steamapps", "libraryfolders.vdf"))
+	if err != nil {
+		return nil, err
+	}
+	var libs []string
+	for _, m := range vdfPathRe.FindAllStringSubmatch(string(vdf), -1) {
+		libs = append(libs, strings.ReplaceAll(m[1], `\\`, `\`))
+	}
+	return libs, nil
+}
+
+// libraryApps maps appid to name for the games installed in one library.
+func libraryApps(lib string) map[string]string {
+	apps := map[string]string{}
+	manifests, _ := filepath.Glob(filepath.Join(lib, "steamapps", "appmanifest_*.acf"))
+	for _, acf := range manifests {
+		b, err := os.ReadFile(acf)
+		if err != nil {
+			continue
+		}
+		id, name := acfIDRe.FindSubmatch(b), acfNameRe.FindSubmatch(b)
+		if id != nil && name != nil {
+			apps[string(id[1])] = string(name[1])
+		}
+	}
+	return apps
 }
 
 func sortApps(apps []App) {

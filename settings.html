@@ -80,6 +80,12 @@
     </fieldset>
 
     <fieldset>
+      <legend>USB drives</legend>
+      <label class="check"><input type="checkbox" id="driveLaunch"> Launch the game on a drive when it's plugged in</label>
+      <p class="hint" style="margin: -6px 0 14px">Install one Steam game to a library folder on the drive. Drives with more than one game are left alone.</p>
+    </fieldset>
+
+    <fieldset>
       <legend>Updates</legend>
       <label><span>Channel</span>
         <select id="updateChannel">
@@ -147,6 +153,7 @@
     $("scannerMatch").value = c.scannerMatch;
     $("scannerBaud").value = c.scannerBaud;
     $("nfcBase").checked = c.nfcBase !== "off";
+    $("driveLaunch").checked = c.driveLaunch !== "off";
     $("updateURL").value = c.updateURL;
     $("updateChannel").value = c.updateChannel || "";
 
@@ -189,6 +196,7 @@
       scannerBaud: Number($("scannerBaud").value),
       scannerMatch: $("scannerMatch").value,
       nfcBase: $("nfcBase").checked ? "" : "off",
+      driveLaunch: $("driveLaunch").checked ? "" : "off",
       updateURL: $("updateURL").value.trim(),
       updateChannel: $("updateChannel").value,
     };
