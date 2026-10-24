@@ -31,12 +31,30 @@
   .status.ok { color: #a5d6a7; }
   code { color: #fff; }
   [hidden] { display: none !important; }
+  .check.disabled { opacity: .45; }
 </style>
+<script src="/print.js"></script>
 </head>
 <body>
 <main>
   <h1>Settings</h1>
   <p class="sub"><a href="/">← Back to games</a> · Saved to <code id="config-path"></code></p>
+
+  <fieldset id="printing">
+    <legend>Printing</legend>
+    <label><span>Template</span>
+      <select id="template"></select>
+    </label>
+    <label><span>Sides</span>
+      <select id="sides"></select>
+      <span class="hint">Side A is the art; side B is the game details. For both sides, set the printer to print on both sides and flip on the long edge.</span>
+    </label>
+    <label class="check" id="qrRow"><input type="checkbox" id="showQR"> QR code on side B</label>
+    <label class="check" id="oneSheetRow"><input type="checkbox" id="oneSheet"> A and B on one sheet</label>
+    <p class="hint" style="margin: -6px 0 14px">For printers that can't print both sides: each card's side A and side B print next to each other, to cut out and glue back to back.</p>
+    <label class="check"><input type="checkbox" id="rounded"> Rounded corners</label>
+    <p class="hint" style="margin: -6px 0 14px">Saved as you change it; no restart needed. <span class="status" id="printStatus"></span></p>
+  </fieldset>
 
   <form id="form" autocomplete="off">
     <fieldset>
@@ -244,6 +262,38 @@
   });
 
   load().catch(err => status($("saveStatus"), "Couldn't load settings: " + err.message, "error"));
+
+  // Printing saves on every change, apart from the restart-and-save form.
+  for (const [id, t] of Object.entries(TEMPLATES)) $("template").append(new Option(t.label, id));
+  for (const [v, label] of Object.entries(SIDES)) $("sides").append(new Option(label, v));
+  function showPrint(p) {
+    $("template").value = p.template;
+    $("sides").value = p.sides;
+    $("showQR").checked = p.showQR;
+    $("oneSheet").checked = p.oneSheet;
+    $("rounded").checked = p.rounded;
+    // Labels are one-sided; QR and one-sheet only apply when side B prints.
+    $("sides").querySelector('option[value="ab"]').disabled = !!TEMPLATES[p.template].singleSided;
+    $("showQR").disabled = p.sides === "a";
+    $("qrRow").classList.toggle("disabled", $("showQR").disabled);
+    $("oneSheet").disabled = p.sides !== "ab";
+    $("oneSheetRow").classList.toggle("disabled", $("oneSheet").disabled);
+  }
+  async function savePrint() {
+    const p = normalizePrint({
+      template: $("template").value, sides: $("sides").value,
+      showQR: $("showQR").checked, oneSheet: $("oneSheet").checked, rounded: $("rounded").checked,
+    });
+    showPrint(p);
+    try {
+      await api("/api/print", "POST", p);
+      status($("printStatus"), "Saved.", "ok");
+    } catch (err) {
+      status($("printStatus"), "Couldn't save: " + err.message, "error");
+    }
+  }
+  for (const id of ["template", "sides", "showQR", "oneSheet", "rounded"]) $(id).addEventListener("change", savePrint);
+  api("/api/print").then(p => showPrint(normalizePrint(p || {}))).catch(err => status($("printStatus"), "Couldn't load: " + err.message, "error"));
 </script>
 </body>
 </html>

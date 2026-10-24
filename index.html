@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Steam QR Launcher</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="/print.js"></script>
 <style>
   body { font-family: system-ui, sans-serif; background: #1b2838; color: #c7d5e0; margin: 0; padding: 24px; }
   h1 { margin: 0 0 4px; color: #fff; }
@@ -19,8 +20,14 @@
   .card.show-qr .qr { display: flex; }
   .card .qr svg { width: auto; height: 100%; max-width: 100%; max-height: 180px; aspect-ratio: 1; display: block; }
   .card.show-qr .store { display: none; }
-  .card .tools { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; gap: 6px; }
-  .card .tools button { width: 32px; height: 32px; padding: 6px; border-radius: 99px; background: rgba(15,25,34,.75); display: grid; place-items: center; }
+  /* The tools are one pill, like YouTube's volume control: just Play until
+     it's hovered or focused, when the other buttons slide out to its left.
+     It stays open while the QR code shows, so its button can close it. */
+  .card .tools { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; flex-direction: row-reverse; align-items: center; padding: 3px; border-radius: 99px; background: rgba(15,25,34,.75); }
+  .card .tools .more { display: flex; gap: 4px; max-width: 0; margin-right: 0; overflow: hidden; opacity: 0; transition: max-width .25s ease, margin-right .25s ease, opacity .2s ease; }
+  .card .tools:hover .more, .card .tools:focus-within .more, .card.show-qr .tools .more { max-width: 112px; margin-right: 4px; opacity: 1; }
+  .card .tools button { flex: none; width: 32px; height: 32px; padding: 6px; border-radius: 99px; background: transparent; display: grid; place-items: center; }
+  @media (prefers-reduced-motion: reduce) { .card .tools .more { transition: none; } }
   .card .tools button:hover, .card.show-qr .tools .show-qr { background: #3d6c8d; }
   .card.custom-art .tools .pick-art { background: #66c0f4; color: #0f1922; }
 
@@ -135,8 +142,7 @@
 
   .print-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 20px; padding: 10px 14px; border: 1px solid #2a475e; border-radius: 10px; font-size: 14px; }
   .print-bar .title { color: #fff; font-weight: 600; }
-  .print-bar label { display: inline-flex; gap: 6px; align-items: center; }
-  .print-bar label.disabled { opacity: .45; }
+  .print-bar a { color: #66c0f4; }
   .print-bar button { padding: 8px 16px; margin-left: auto; }
 </style>
 </head>
@@ -163,16 +169,8 @@
 </header>
 <section class="print-bar" aria-label="Print settings">
   <span class="title">Print</span>
-  <label>Template <select id="template"></select></label>
-  <label title="Side A is the full art; side B is the game details. Both sides prints double-sided: set the printer to print on both sides, flip on long edge.">
-    Sides <select id="sides">
-      <option value="ab">Both sides (A art, B details)</option>
-      <option value="a">Side A only (art)</option>
-      <option value="b">Side B only (details)</option>
-    </select></label>
-  <label id="qrLabel" title="Include the QR code on side B"><input type="checkbox" id="showQR" checked> QR code on side B</label>
-  <label id="oneSheetLabel" title="Print each card's side A and side B next to each other on one sheet, for printers without double-sided printing. Cut them out and glue them back to back."><input type="checkbox" id="oneSheet"> A and B on one sheet</label>
-  <label title="Round the card corners; otherwise they print square"><input type="checkbox" id="rounded"> Rounded corners</label>
+  <span id="print-summary"></span>
+  <a href="/settings#printing" title="Change the template, sides and other print settings">Change</a>
   <button id="print" title="Print the games shown, at 100% scale with margins set to None or Default">Print cards</button>
   <button id="clear-selection" title="Clear the selection (Esc)">Clear selection</button>
 </section>
@@ -233,9 +231,11 @@
       ${store === "epic" ? `<span class="store epic" title="Epic game: starts through the Epic Games Launcher">EPIC</span>` : ""}
       <div class="tools">
         <button class="play" title="Play on this PC" aria-label="Play on this PC">${ICON_PLAY}</button>
-        <button class="show-qr" title="Show QR code" aria-label="Show QR code">${ICON_QR}</button>
-        <button class="pick-art" title="Choose the printed art" aria-label="Choose the printed art">${ICON_IMAGE}</button>
-        <button class="print-one" title="Print this card" aria-label="Print this card">${ICON_PRINT}</button>
+        <div class="more">
+          <button class="show-qr" title="Show QR code" aria-label="Show QR code">${ICON_QR}</button>
+          <button class="pick-art" title="Choose the printed art" aria-label="Choose the printed art">${ICON_IMAGE}</button>
+          <button class="print-one" title="Print this card" aria-label="Print this card">${ICON_PRINT}</button>
+        </div>
       </div>
       <div class="qr" title="Click to hide">${qr.createSvgTag({ scalable: true, margin: 2 })}</div>
       <div class="name"></div>
@@ -268,7 +268,8 @@
     });
     card.querySelector(".print-one").addEventListener("click", e => {
       e.stopPropagation();
-      printCards([{ id }], e.currentTarget);
+      // On a selected card it prints the whole selection.
+      printCards(selected.has(id) ? printTargets() : [{ id }], e.currentTarget);
     });
     card.addEventListener("click", e => {
       if (e.ctrlKey || e.metaKey) return toggleSelected(id);
@@ -445,52 +446,27 @@
   function syncSelection() {
     document.body.classList.toggle("has-selection", selected.size > 0);
     document.getElementById("print").textContent = selected.size ? `Print ${selected.size} selected` : "Print cards";
+    for (const [id, el] of Object.entries(cardEls)) {
+      const title = selected.has(id) && selected.size > 1 ? `Print the ${selected.size} selected cards` : "Print this card";
+      el.querySelector(".print-one").title = title;
+      el.querySelector(".print-one").setAttribute("aria-label", title);
+    }
   }
   const printTargets = () => selected.size ? APPS.filter(({ id }) => selected.has(id)) : shownApps();
   document.getElementById("clear-selection").addEventListener("click", clearSelection);
 
-  // Print templates. card is the cell on the stock; rotate turns portrait
-  // cards to fit landscape cells. All sizes are what the stock measures; Avery lists
-  // 28877 as using the same layout as 5371 (2 × 5, 0.5in top, 0.75in sides).
-  const TEMPLATES = {
-    "avery-28877": { label: "Avery 28877 Clean Edge (10 per sheet)", page: ["8.5in", "11in"], cols: 2, rows: 5,
-                     card: ["3.5in", "2in"], margin: "0.5in 0.75in", gap: "0", pad: "3mm", rotate: true },
-    "avery-5371":  { label: "Avery 5371 business cards (10 per sheet)", page: ["8.5in", "11in"], cols: 2, rows: 5,
-                     card: ["3.5in", "2in"], margin: "0.5in 0.75in", gap: "0", pad: "3mm", rotate: true },
-    "cr80":        { label: "Credit card size, 54 × 85.6 mm (9 per sheet)", page: ["8.5in", "11in"], cols: 3, rows: 3,
-                     card: ["53.98mm", "85.6mm"], gap: "6mm", center: true, cutlines: true, pad: "3mm" },
-    "trading":     { label: "Trading card, 63 × 88 mm (9 per sheet)", page: ["8.5in", "11in"], cols: 3, rows: 3,
-                     card: ["63mm", "88mm"], gap: "0", center: true, cutlines: true, pad: "3mm" },
-    "toploader":   { label: "Top loader, 2¾ × 3⅞ in (6 per sheet)", page: ["8.5in", "11in"], cols: 2, rows: 3,
-                     card: ["3.875in", "2.75in"], gap: "5mm", center: true, cutlines: true, pad: "3mm", rotate: true },
-    "labelife":    { label: "LabelLife thermal label, 3 × 2 in", page: ["3in", "2in"], cols: 1, rows: 1,
-                     card: ["3in", "2in"], gap: "0", mono: true, pad: "2.5mm", singleSided: true, rotate: true },
-  };
+  // Print settings are chosen in Settings and kept by the app (print.js has
+  // the templates). Settings this browser kept before then are moved over once.
   const $ = id => document.getElementById(id);
-  const prefs = (() => { try { return JSON.parse(localStorage.getItem("printPrefs")) || {}; } catch { return {}; } })();
-  for (const [id, t] of Object.entries(TEMPLATES)) $("template").append(new Option(t.label, id));
-  $("template").value = TEMPLATES[prefs.template] ? prefs.template : "avery-28877";
-  $("sides").value = ["a", "b", "ab"].includes(prefs.sides) ? prefs.sides : "ab";
-  $("showQR").checked = prefs.showQR !== false;
-  $("rounded").checked = !!prefs.rounded;
-  $("oneSheet").checked = !!prefs.oneSheet;
-
-  function syncPrintBar() {
-    // Labels are one-sided, so they print side A or side B, not both.
-    const single = !!TEMPLATES[$("template").value].singleSided;
-    $("sides").querySelector('option[value="ab"]').disabled = single;
-    if (single && $("sides").value === "ab") $("sides").value = "b";
-    const hasB = $("sides").value !== "a";
-    $("showQR").disabled = !hasB;
-    $("qrLabel").classList.toggle("disabled", !hasB);
-    $("oneSheet").disabled = $("sides").value !== "ab";
-    $("oneSheetLabel").classList.toggle("disabled", $("oneSheet").disabled);
+  let saved = {{.Print}};
+  if (!saved) {
     try {
-      localStorage.setItem("printPrefs", JSON.stringify({ template: $("template").value, sides: $("sides").value, showQR: $("showQR").checked, rounded: $("rounded").checked, oneSheet: $("oneSheet").checked }));
+      saved = JSON.parse(localStorage.getItem("printPrefs"));
+      if (saved) fetch("/api/print", { method: "POST", headers: { "X-Key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(normalizePrint(saved)) });
     } catch {}
   }
-  for (const id of ["template", "sides", "showQR", "rounded", "oneSheet"]) $(id).addEventListener("change", syncPrintBar);
-  syncPrintBar();
+  const PRINT = normalizePrint(saved || {});
+  $("print-summary").textContent = printSummary(PRINT);
 
   const loadImg = (img, ...srcs) => (async () => {
     for (const src of srcs) {
@@ -540,7 +516,7 @@
   // The card's portrait size in inches on the chosen template; turned cards
   // swap the cell's sides.
   function cardInches() {
-    const t = TEMPLATES[$("template").value];
+    const t = TEMPLATES[PRINT.template];
     const [w, h] = t.card.map(s => parseFloat(s) / (s.endsWith("mm") ? 25.4 : 1));
     return t.rotate ? [h, w] : [w, h];
   }
@@ -728,15 +704,15 @@
   // each side A sheet is followed by its side B, mirrored left-to-right so
   // cards line up when the printer flips on the long edge.
   function buildPrint(apps = printTargets()) {
-    const t = TEMPLATES[$("template").value];
-    const sides = $("sides").value;
-    const opts = { qr: $("showQR").checked };
+    const t = TEMPLATES[PRINT.template];
+    const sides = PRINT.sides;
+    const opts = { qr: PRINT.showQR };
     $("page-style").textContent = `@page { size: ${t.page[0]} ${t.page[1]}; margin: 0; }`;
     const root = $("print-root");
     root.replaceChildren();
-    root.classList.toggle("rounded", $("rounded").checked);
+    root.classList.toggle("rounded", PRINT.rounded);
     const waits = [];
-    if (sides === "ab" && $("oneSheet").checked) {
+    if (sides === "ab" && PRINT.oneSheet) {
       // Each card's side A and side B sit in consecutive cells, both facing
       // the same way, to be cut out and glued back to back.
       const perSheet = Math.floor(t.cols * t.rows / 2);

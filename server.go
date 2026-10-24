@@ -31,6 +31,7 @@ type Server struct {
 	nfc        *NFCManager // nil when the NFC base is disabled
 	details    *DetailsStore
 	artChoices *ArtChoices // the art picked for printing, per game
+	print      *PrintStore // the print settings
 	cfg        Config
 	quit       func() // exits the app (after a relaunch or update has started)
 }
@@ -42,6 +43,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /cover/{appid}", s.art)
 	mux.HandleFunc("GET /art/{appid}/{kind}", s.art)
 	mux.HandleFunc("GET /settings", s.settingsPage)
+	mux.HandleFunc("GET /print.js", servePrintJS)
+	mux.HandleFunc("GET /api/print", s.localAPI(s.getPrint))
+	mux.HandleFunc("POST /api/print", s.localAPI(s.savePrint))
 	mux.HandleFunc("GET /api/art/{appid}", s.localAPI(s.artCandidates))
 	mux.HandleFunc("GET /api/art/{appid}/screenshots", s.localAPI(s.artScreenshots))
 	mux.HandleFunc("POST /api/art/{appid}", s.localAPI(s.saveArt))
@@ -91,6 +95,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		"Key":     s.key,
 		"NFC":     s.nfc != nil,
 		"Art":     s.artChoices.All(),
+		"Print":   s.print.Get(),
 	})
 	if err != nil {
 		log.Printf("render index: %v", err)

@@ -59,7 +59,7 @@ func main() {
 	details := LoadDetails()
 	go details.FetchMissing(launcher.Apps())
 	var app *application.App
-	srv := &Server{launcher: launcher, key: key, base: fmt.Sprintf("http://%s:%d", host, cfg.Port), details: details, artChoices: LoadArtChoices(), cfg: cfg, quit: func() { app.Quit() }}
+	srv := &Server{launcher: launcher, key: key, base: fmt.Sprintf("http://%s:%d", host, cfg.Port), details: details, artChoices: LoadArtChoices(), print: LoadPrintPrefs(), cfg: cfg, quit: func() { app.Quit() }}
 	if !strings.EqualFold(cfg.NFCBase, "off") {
 		cards, err := LoadCards()
 		if err != nil {
