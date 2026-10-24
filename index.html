@@ -52,6 +52,7 @@
   .art-preview.dragging { cursor: grabbing; }
   .art-preview .pcard { position: absolute; inset: 0; }
   .art-preview img { -webkit-user-drag: none; }
+  .art-side label { cursor: pointer; }
   .art-actions { display: flex; gap: 8px; margin-top: 16px; }
   .art-actions button { padding: 8px 16px; }
   .art-actions #art-save { background: #5c7e10; }
@@ -582,7 +583,6 @@
   function showPreview() {
     const box = $("art-preview");
     $("art-logo").checked = !!picking.choice?.logo;
-    $("art-logo").disabled = !picking.choice;
     box.replaceChildren(artCard(picking.id, cardEls[picking.id], {}, [], picking.choice));
     box.classList.toggle("movable", !!picking.choice);
   }
@@ -620,7 +620,14 @@
   $("art-preview").addEventListener("pointerup", endDrag);
   $("art-preview").addEventListener("pointercancel", endDrag);
   $("art-logo").addEventListener("change", () => {
-    if (picking.choice) picking.choice.logo = $("art-logo").checked;
+    // On automatic art, the art the preview shows becomes the choice.
+    if (!picking.choice) {
+      const art = $("art-preview").querySelector("img.hero");
+      if (!art?.naturalWidth) return $("art-logo").checked = false;
+      picking.choice = { src: art.getAttribute("src"), pos: "" };
+      for (const o of $("art-list").querySelectorAll("button")) o.setAttribute("aria-pressed", o.dataset.src === picking.choice.src);
+    }
+    picking.choice.logo = $("art-logo").checked;
     showPreview();
   });
   async function saveArt(choice) {
