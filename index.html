@@ -204,6 +204,7 @@
   <span class="muted">Ctrl+click cards to select them for printing.</span>
 </section>
 </div>
+<div id="toolbar-spacer"></div>
 <div class="grid" id="grid"></div>
 <div class="empty" id="empty">No games match.</div>
 <dialog id="art-dlg" aria-labelledby="art-title">
@@ -417,8 +418,14 @@
   // Once scrolled past, the toolbar sticks and slims down. A letter picked from
   // it brings the grid's top back under it, before the cards are measured.
   const toolbar = document.getElementById("toolbar");
-  new IntersectionObserver(([e]) => toolbar.classList.toggle("stuck", !e.isIntersecting))
-    .observe(document.getElementById("toolbar-sentinel"));
+  // The spacer takes up what the slimmed toolbar gives back, so the page below
+  // doesn't move; otherwise scroll anchoring pulls the page up, unsticking it.
+  const spacer = document.getElementById("toolbar-spacer");
+  new IntersectionObserver(([e]) => {
+    const full = toolbar.offsetHeight;
+    toolbar.classList.toggle("stuck", !e.isIntersecting);
+    spacer.style.height = e.isIntersecting ? "" : `${Math.max(0, full - toolbar.offsetHeight)}px`;
+  }).observe(document.getElementById("toolbar-sentinel"));
   function toGridTop() {
     if (!toolbar.classList.contains("stuck")) return;
     scrollBy({ top: grid.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom - 16, behavior: "instant" });
