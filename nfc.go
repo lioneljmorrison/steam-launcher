@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lioneljmorrison/steam-launcher/internal/infinity"
+	"github.com/lioneljmorrison/cardtridge/internal/infinity"
 )
 
 const (

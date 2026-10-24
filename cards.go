@@ -10,7 +10,7 @@ import (
 )
 
 // CardStore maps NFC tag UIDs (hex) to Steam appids, saved in
-// %APPDATA%\steam-launcher\cards.json.
+// %APPDATA%\cardtridge\cards.json.
 type CardStore struct {
 	mu    sync.Mutex
 	path  string

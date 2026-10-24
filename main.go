@@ -1,5 +1,6 @@
-// Command steam-launcher is a Windows tray app: scan a QR code with your phone
-// or a scanner, and it launches the Steam game on this PC.
+// Command cardtridge is a Windows tray app: scan a QR code with your phone
+// or a scanner, tap an NFC card or plug in a USB drive, and it launches the
+// Steam, GOG or Epic game on this PC.
 package main
 
 import (
@@ -20,20 +21,32 @@ import (
 )
 
 const (
-	appName = "Steam QR Launcher"
+	appName = "Cardtridge"
 	runKey  = `Software\Microsoft\Windows\CurrentVersion\Run`
-	runName = "SteamQRLauncher"
+	runName = "Cardtridge"
+	// The app was called Steam QR Launcher, in steam-launcher folders.
+	oldRunName = "SteamQRLauncher"
+	oldDirName = "steam-launcher"
 )
 
 func main() {
-	setupLogging()
 	finishUpdate()
+	// After finishUpdate, so a version handing over has let go of its folders.
+	moveErr := moveOldDirs()
+	setupLogging()
 	log.Printf("starting %s %s", appName, version)
-
-	name, _ := windows.UTF16PtrFromString(`Local\SteamQRLauncher`)
-	if _, err := windows.CreateMutex(nil, false, name); errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-		fatal("Steam QR Launcher is already running. Look for it in the system tray.")
+	if moveErr != nil {
+		log.Printf("moving steam-launcher folders: %v; using them where they are", moveErr)
 	}
+
+	// The old name's mutex too, so this and a Steam QR Launcher don't both run.
+	for _, mutex := range []string{`Local\Cardtridge`, `Local\SteamQRLauncher`} {
+		name, _ := windows.UTF16PtrFromString(mutex)
+		if _, err := windows.CreateMutex(nil, false, name); errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
+			fatal(appName + " is already running. Look for it in the system tray.")
+		}
+	}
+	moveOldStartup()
 
 	cfg, err := loadConfig()
 	if err != nil {
@@ -213,12 +226,65 @@ func setStartup(on bool) error {
 	return k.SetStringValue(runName, `"`+exe+`"`)
 }
 
-func logDir() string {
+// moveOldStartup points a "Start with Windows" entry left by Steam QR
+// Launcher at this exe, under the new name.
+func moveOldStartup() {
+	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE|registry.SET_VALUE)
+	if err != nil {
+		return
+	}
+	defer k.Close()
+	if _, _, err := k.GetStringValue(oldRunName); err != nil {
+		return
+	}
+	if err := setStartup(true); err != nil {
+		log.Printf("moving start with windows: %v", err)
+		return
+	}
+	k.DeleteValue(oldRunName)
+	log.Print("moved start with windows to the new name")
+}
+
+func cacheBase() string {
 	dir, err := os.UserCacheDir() // %LOCALAPPDATA%
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return filepath.Join(dir, "steam-launcher")
+	return dir
+}
+
+func logDir() string { return appDir(cacheBase()) }
+
+// appDir is the app's folder under base. Until moveOldDirs has moved it,
+// that's the old steam-launcher folder.
+func appDir(base string) string {
+	dir := filepath.Join(base, "cardtridge")
+	if _, err := os.Stat(dir); err != nil {
+		if old := filepath.Join(base, oldDirName); dirExists(old) {
+			return old
+		}
+	}
+	return dir
+}
+
+func dirExists(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
+}
+
+// moveOldDirs renames the steam-launcher settings and cache folders to
+// cardtridge. When one is in use, it's left for the next start.
+func moveOldDirs() error {
+	var errs []error
+	for _, base := range []string{configBase(), cacheBase()} {
+		old, dir := filepath.Join(base, oldDirName), filepath.Join(base, "cardtridge")
+		if dirExists(old) && !dirExists(dir) {
+			if err := os.Rename(old, dir); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func setupLogging() {

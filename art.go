@@ -21,7 +21,7 @@ type ArtChoice struct {
 }
 
 // ArtChoices keeps the picked art per appid, saved in
-// %APPDATA%\steam-launcher\art.json.
+// %APPDATA%\cardtridge\art.json.
 type ArtChoices struct {
 	mu      sync.Mutex
 	path    string

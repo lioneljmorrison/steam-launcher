@@ -16,7 +16,7 @@ import (
 )
 
 // Details is store information about a game, cached in
-// %LOCALAPPDATA%\steam-launcher\details.json.
+// %LOCALAPPDATA%\cardtridge\details.json.
 type Details struct {
 	Developer   string   `json:"developer,omitempty"`
 	Publisher   string   `json:"publisher,omitempty"`

@@ -13,7 +13,7 @@ import (
 var printJS []byte
 
 // PrintPrefs are the print settings last chosen in Settings, saved in
-// %APPDATA%\steam-launcher\print.json. Settings and the games page check
+// %APPDATA%\cardtridge\print.json. Settings and the games page check
 // them against the templates in print.js.
 type PrintPrefs struct {
 	Template string `json:"template,omitempty"`

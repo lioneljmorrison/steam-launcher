@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// Config lives in %APPDATA%\steam-launcher\config.json.
+// Config lives in %APPDATA%\cardtridge\config.json.
 type Config struct {
 	Port   int    `json:"port"`
 	HostIP string `json:"hostIP"` // LAN IP in the QR codes; auto-detected when empty
@@ -29,13 +29,15 @@ type Config struct {
 	UpdateURL     string `json:"updateURL"` // custom latest.json; empty uses GitHub releases for the channel
 }
 
-func configDir() string {
-	dir, err := os.UserConfigDir()
+func configBase() string {
+	dir, err := os.UserConfigDir() // %APPDATA%
 	if err != nil {
 		dir = "."
 	}
-	return filepath.Join(dir, "steam-launcher")
+	return dir
 }
+
+func configDir() string { return appDir(configBase()) }
 
 func defaultConfig() Config {
 	return Config{Port: 8787, ScannerBaud: 9600, ScannerMatch: `(?i)scan|barcode`}

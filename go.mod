@@ -1,4 +1,4 @@
-module github.com/lioneljmorrison/steam-launcher
+module github.com/lioneljmorrison/cardtridge
 
 go 1.27.0
 
