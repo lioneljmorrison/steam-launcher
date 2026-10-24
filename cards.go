@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// CardStore maps NFC tag UIDs (hex) to Steam appids, saved in
+// CardStore maps NFC tag UIDs (hex) and SD card volume serials ("SD-" + hex) to appids, saved in
 // %APPDATA%\cardtridge\cards.json.
 type CardStore struct {
 	mu    sync.Mutex

@@ -195,7 +195,7 @@
 <div class="toolbar-sentinel" id="toolbar-sentinel"></div>
 <div class="toolbar" id="toolbar">
 <div class="banner" id="banner">
-  <span>New card <code id="pending-uid"></code> on the base — click a game to link it.</span>
+  <span>New card <code id="pending-uid"></code> — click a game to link it.</span>
   <button id="cancel-link" title="Forget this card (Esc)">Cancel</button>
 </div>
 <nav class="nav" aria-label="Games">
@@ -409,8 +409,12 @@
       links.replaceChildren(...uids.map(uid => {
         const chip = document.createElement("span");
         chip.className = "link";
-        chip.title = "NFC card linked to this game";
-        chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-label="NFC"><path d="M7 9a4.5 4.5 0 0 1 0 6"/><path d="M10.5 6a9 9 0 0 1 0 12"/><path d="M14 3a13.5 13.5 0 0 1 0 18"/></svg><code></code><button title="Unlink this card">×</button>`;
+        const sd = uid.startsWith("SD-");
+        chip.title = sd ? "SD card linked to this game" : "NFC card linked to this game";
+        chip.innerHTML = (sd
+          ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-label="SD"><path d="M9 3h9a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7z"/></svg>`
+          : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-label="NFC"><path d="M7 9a4.5 4.5 0 0 1 0 6"/><path d="M10.5 6a9 9 0 0 1 0 12"/><path d="M14 3a13.5 13.5 0 0 1 0 18"/></svg>`)
+          + `<code></code><button title="Unlink this card">×</button>`;
         chip.querySelector("code").textContent = uid;
         chip.querySelector("button").addEventListener("click", e => {
           e.stopPropagation();

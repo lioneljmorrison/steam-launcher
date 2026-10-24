@@ -75,7 +75,8 @@ func main() {
 	go details.FetchMissing(launcher.Apps())
 	var app *application.App
 	srv := &Server{launcher: launcher, key: key, base: fmt.Sprintf("http://%s:%d", host, cfg.Port), details: details, artChoices: LoadArtChoices(), print: LoadPrintPrefs(), cfg: cfg, quit: func() { app.Quit() }}
-	if !strings.EqualFold(cfg.NFCBase, "off") {
+	// SD cards are linked like NFC cards, so the card store also serves the drive watcher.
+	if !strings.EqualFold(cfg.NFCBase, "off") || !strings.EqualFold(cfg.DriveLaunch, "off") {
 		cards, err := LoadCards()
 		if err != nil {
 			fatal("Couldn't read cards.json: " + err.Error())
@@ -84,7 +85,7 @@ func main() {
 	}
 	go func() { log.Fatal(http.Serve(ln, srv.Handler())) }()
 	if !strings.EqualFold(cfg.DriveLaunch, "off") {
-		go watchDrives(launcher)
+		go watchDrives(launcher, srv.nfc)
 	}
 	log.Printf("serving on :%d, codes point at %s", cfg.Port, srv.base)
 
@@ -159,7 +160,7 @@ func setupTray(app *application.App, cfg Config, launcher *Launcher, details *De
 		}
 	})
 
-	if nfc != nil {
+	if nfc != nil && !strings.EqualFold(cfg.NFCBase, "off") {
 		mNFC := menu.Add("NFC base: looking…").SetEnabled(false)
 		nfc.onStatus = func(s string) { onMain(func() { mNFC.SetLabel(s) }) }
 		workers = append(workers, nfc.Run)

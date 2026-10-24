@@ -28,7 +28,7 @@ type Server struct {
 	launcher   *Launcher
 	key        string
 	base       string
-	nfc        *NFCManager // nil when the NFC base is disabled
+	nfc        *NFCManager // nil when both the NFC base and drive launching are disabled
 	details    *DetailsStore
 	artChoices *ArtChoices // the art picked for printing, per game
 	print      *PrintStore // the print settings
@@ -167,7 +167,7 @@ func (s *Server) localAPI(h http.HandlerFunc) http.HandlerFunc {
 func (s *Server) withNFC(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.nfc == nil {
-			http.Error(w, "NFC base disabled", http.StatusNotFound)
+			http.Error(w, "cards disabled", http.StatusNotFound)
 			return
 		}
 		h(w, r)
