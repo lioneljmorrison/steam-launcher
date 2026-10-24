@@ -32,7 +32,13 @@
   code { color: #fff; }
   [hidden] { display: none !important; }
   .check.disabled { opacity: .45; }
+  .status.warn, .hint.warn { color: #e8a33d; opacity: 1; }
+  #netResult p.status { margin: 0 0 8px; }
+  .phone-test { display: flex; gap: 16px; align-items: center; margin: 4px 0 14px; font-size: 14px; }
+  #netQR { flex: none; width: 132px; height: 132px; padding: 6px; border-radius: 8px; background: #fff; }
+  #netQR svg { display: block; width: 100%; height: 100%; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="/print.js"></script>
 </head>
 <body>
@@ -60,13 +66,32 @@
     <fieldset>
       <legend>Network</legend>
       <label><span>Port</span>
-        <input type="number" id="port" min="1" max="65535" required>
-        <span class="hint">For the QR page and phone links. Changing it changes the links in printed QR codes.</span>
+        <div class="row">
+          <input type="number" id="port" min="1" max="65535" required>
+          <button type="button" id="freePort" title="Fill in the first free port from 8787 up">Find a free port</button>
+        </div>
+        <span class="hint">For the QR page and phone links.</span>
       </label>
       <label><span>Address in QR codes</span>
-        <input type="text" id="hostIP" placeholder="">
-        <span class="hint">Leave blank to detect this PC's LAN address automatically.</span>
+        <input type="text" id="hostIP" placeholder="" list="addresses">
+        <datalist id="addresses"></datalist>
+        <span class="hint">Leave blank to detect this PC's LAN address automatically, or pick one of its addresses.</span>
       </label>
+      <p class="hint warn" id="netChanged" hidden>Changing the address or port changes the links in QR codes, so cards printed before won't work. Reprint them after saving.</p>
+      <div class="actions" style="margin: 0 0 14px">
+        <button type="button" id="checkNet">Check address and port</button>
+      </div>
+      <div id="netResult" hidden>
+        <p class="status" id="netAddress"></p>
+        <p class="status" id="netPort"></p>
+        <div class="phone-test" id="phoneTest" hidden>
+          <div id="netQR"></div>
+          <div>
+            <p style="margin-top: 0">Scan this with your phone, on the same Wi-Fi, to check it can reach <code id="netURL"></code>.</p>
+            <p class="status" id="netPhone"></p>
+          </div>
+        </div>
+      </div>
     </fieldset>
 
     <fieldset>
@@ -168,6 +193,7 @@
     $("port").value = c.port;
     $("hostIP").value = c.hostIP;
     $("hostIP").placeholder = `Auto-detect (currently ${detected.hostIP})`;
+    $("addresses").replaceChildren(...(detected.addresses || []).map(a => new Option(a.name, a.ip)));
     $("scannerMatch").value = c.scannerMatch;
     $("scannerBaud").value = c.scannerBaud;
     $("nfcBase").checked = c.nfcBase !== "off";
@@ -188,6 +214,83 @@
   }
 
   $("scannerMode").addEventListener("change", syncScannerRows);
+
+  // Address and port: a check of both, then a phone test of them, before saving.
+  let netPoll = null;
+  function stopNetTest() {
+    clearInterval(netPoll);
+    netPoll = null;
+  }
+  function netEdited() {
+    $("netChanged").hidden = !loaded || (Number($("port").value) === loaded.config.port && $("hostIP").value.trim() === loaded.config.hostIP);
+    if (!$("netResult").hidden) {
+      $("netResult").hidden = true;
+      stopNetTest();
+      api("/api/network/stop", "POST").catch(() => {});
+    }
+  }
+  $("port").addEventListener("input", netEdited);
+  $("hostIP").addEventListener("input", netEdited);
+
+  $("freePort").addEventListener("click", async () => {
+    try {
+      $("port").value = (await api("/api/network/free-port")).port;
+      netEdited();
+    } catch (err) {
+      $("netResult").hidden = false;
+      $("phoneTest").hidden = true;
+      status($("netAddress"), "");
+      status($("netPort"), err.message, "error");
+    }
+  });
+
+  $("checkNet").addEventListener("click", async () => {
+    stopNetTest();
+    const button = $("checkNet");
+    button.disabled = true;
+    try {
+      const r = await api("/api/network/check", "POST", { hostIP: $("hostIP").value.trim(), port: Number($("port").value) });
+      $("netResult").hidden = false;
+      const show = (el, c) => status(el, (c.ok ? "✓ " : c.warn ? "⚠ " : "✗ ") + c.message, c.ok ? "ok" : c.warn ? "warn" : "error");
+      show($("netAddress"), r.address);
+      show($("netPort"), r.port);
+      $("phoneTest").hidden = !r.test;
+      if (!r.test) return;
+      if (r.test.error) {
+        $("phoneTest").hidden = true;
+        status($("netPort"), r.test.error, "error");
+        return;
+      }
+      const qr = qrcode(0, "M");
+      qr.addData(r.test.url);
+      qr.make();
+      $("netQR").innerHTML = qr.createSvgTag({ scalable: true, margin: 2 });
+      $("netURL").textContent = r.test.url.replace(/\/ping\?.*/, "");
+      status($("netPhone"), "Waiting for your phone…");
+      const until = Date.now() + r.test.seconds * 1000;
+      netPoll = setInterval(async () => {
+        try {
+          const s = await api(`/api/network/test/${r.test.token}`);
+          if (s.reached) {
+            stopNetTest();
+            status($("netPhone"), `✓ Your phone reached it (from ${s.reached}). Phones on this network can use these settings.`, "ok");
+          } else if (s.over || Date.now() > until) {
+            stopNetTest();
+            status($("netPhone"), "✗ No phone reached it. Check the phone is on the same Wi-Fi as this PC, then check again. If it still fails, Windows Firewall or the router may be blocking it.", "error");
+          } else if (s.local) {
+            status($("netPhone"), "That was opened on this PC, which doesn't test the network. Scan the code with your phone.", "warn");
+          }
+        } catch {}
+      }, 1000);
+    } catch (err) {
+      $("netResult").hidden = false;
+      $("phoneTest").hidden = true;
+      status($("netAddress"), err.message, "error");
+      status($("netPort"), "");
+    } finally {
+      button.disabled = false;
+    }
+  });
   $("resetURL").addEventListener("click", () => { $("updateURL").value = loaded.defaults.updateURL; });
 
   // Wait for the restarted app to answer, then reload from it.

@@ -65,7 +65,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 		"defaults":   defaultConfig(),
 		"version":    version,
 		"configPath": configPath(),
-		"detected":   map[string]any{"hostIP": lanIP(), "ports": portList},
+		"detected":   map[string]any{"hostIP": lanIP(), "addresses": lanAddrs(), "ports": portList},
 	})
 }
 
@@ -76,6 +76,12 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := validateConfig(&cfg); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// A port the restarted app can't open would stop it at startup.
+	s.tests.stop()
+	if err := s.portFree(cfg.Port); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

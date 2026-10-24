@@ -32,6 +32,7 @@ type Server struct {
 	details    *DetailsStore
 	artChoices *ArtChoices // the art picked for printing, per game
 	print      *PrintStore // the print settings
+	tests      netTests    // the phone test Settings runs on an address and port
 	cfg        Config
 	quit       func() // exits the app (after a relaunch or update has started)
 }
@@ -44,6 +45,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /art/{appid}/{kind}", s.art)
 	mux.HandleFunc("GET /settings", s.settingsPage)
 	mux.HandleFunc("GET /print.js", servePrintJS)
+	mux.HandleFunc("GET /ping", s.ping)
+	mux.HandleFunc("POST /api/network/check", s.localAPI(s.checkNetwork))
+	mux.HandleFunc("GET /api/network/test/{token}", s.localAPI(s.netTestStatus))
+	mux.HandleFunc("POST /api/network/stop", s.localAPI(s.stopNetTest))
+	mux.HandleFunc("GET /api/network/free-port", s.localAPI(s.freePort))
 	mux.HandleFunc("GET /api/print", s.localAPI(s.getPrint))
 	mux.HandleFunc("POST /api/print", s.localAPI(s.savePrint))
 	mux.HandleFunc("GET /api/art/{appid}", s.localAPI(s.artCandidates))
