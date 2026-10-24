@@ -392,7 +392,8 @@
       document.body.classList.toggle("linking", !!p);
       for (const [id, el] of Object.entries(cardEls)) {
         el.classList.toggle("linked", linked.has(id));
-        el.title = p ? `Click to link card ${p.uid} to this game` : SELECT_TIP;
+        const tip = p ? `Click to link card ${p.uid} to this game` : SELECT_TIP;
+        if (el.title !== tip) el.title = tip; // rewriting it every poll would restart the tooltip
       }
     };
     const key = p ? [...linked].sort().join() + "|linking" : "";
