@@ -584,7 +584,19 @@
     const box = $("art-preview");
     $("art-logo").checked = !!picking.choice?.logo;
     box.replaceChildren(artCard(picking.id, cardEls[picking.id], {}, [], picking.choice));
-    box.classList.toggle("movable", !!picking.choice);
+    box.classList.toggle("movable", !!picking);
+  }
+
+  // On automatic art, the art the preview shows becomes the choice when it's
+  // moved or given a logo, kept as it looks now. False while it's loading.
+  function adoptShown() {
+    if (picking.choice) return true;
+    const box = $("art-preview"), art = box.querySelector("img.hero");
+    if (!art?.naturalWidth) return false;
+    picking.choice = { src: art.getAttribute("src"), pos: "", logo: !!box.querySelector("img.logo, .title") };
+    $("art-logo").checked = picking.choice.logo;
+    for (const o of $("art-list").querySelectorAll("button")) o.setAttribute("aria-pressed", o.dataset.src === picking.choice.src);
+    return true;
   }
 
   // Dragging the preview pans the picked art inside the card. The art is
@@ -593,7 +605,7 @@
   let drag = null;
   $("art-preview").addEventListener("pointerdown", e => {
     const art = e.currentTarget.querySelector("img.hero");
-    if (!picking?.choice || !art?.naturalWidth) return;
+    if (!picking || !adoptShown()) return;
     const box = e.currentTarget.getBoundingClientRect();
     const scale = Math.max(box.width / art.naturalWidth, box.height / art.naturalHeight);
     const [x, y] = (picking.choice.pos || "50% 50%").split(" ").map(parseFloat);
@@ -620,14 +632,9 @@
   $("art-preview").addEventListener("pointerup", endDrag);
   $("art-preview").addEventListener("pointercancel", endDrag);
   $("art-logo").addEventListener("change", () => {
-    // On automatic art, the art the preview shows becomes the choice.
-    if (!picking.choice) {
-      const art = $("art-preview").querySelector("img.hero");
-      if (!art?.naturalWidth) return $("art-logo").checked = false;
-      picking.choice = { src: art.getAttribute("src"), pos: "" };
-      for (const o of $("art-list").querySelectorAll("button")) o.setAttribute("aria-pressed", o.dataset.src === picking.choice.src);
-    }
-    picking.choice.logo = $("art-logo").checked;
+    const logo = $("art-logo").checked;
+    if (!adoptShown()) return $("art-logo").checked = false;
+    picking.choice.logo = logo;
     showPreview();
   });
   async function saveArt(choice) {
