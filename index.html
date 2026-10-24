@@ -105,6 +105,9 @@
 
   select, input[type=search] { font: inherit; padding: 7px 10px; border-radius: 6px; border: 1px solid #3d6c8d; background: #0f1922; color: #fff; }
   input[type=search] { width: 220px; }
+  .search { position: relative; display: inline-flex; align-items: center; }
+  .search svg { position: absolute; left: 9px; width: 16px; height: 16px; color: #8fa9bd; pointer-events: none; }
+  .search input { padding-left: 32px; }
 
   /* Search, letter jump and selection. */
   .finder { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 0 0 16px; }
@@ -116,8 +119,8 @@
   .empty.show { display: block; }
   .card.selected { box-shadow: 0 0 0 4px #66c0f4; }
   .card.selected::after { content: "✓"; position: absolute; left: 8px; bottom: 8px; z-index: 2; width: 24px; height: 24px; border-radius: 99px; background: #66c0f4; color: #0f1922; font-weight: 800; display: grid; place-items: center; }
-  #clear-selection { display: none; margin-left: 0; }
-  body.has-selection #clear-selection { display: inline-block; }
+  #clear-selection { display: none; }
+  body.has-selection #clear-selection { display: inline-flex; }
 
   /* Printing builds #print-root from the template's sheet geometry (see TEMPLATES). */
   #print-root { display: none; }
@@ -156,17 +159,43 @@
   .print-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 0 0 20px; padding: 10px 14px; border: 1px solid #2a475e; border-radius: 10px; font-size: 14px; }
   .print-bar .title { color: #fff; font-weight: 600; }
   .print-bar a { color: #66c0f4; }
-  .print-bar button { padding: 8px 16px; margin-left: auto; }
+  .print-bar button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; }
+  .print-bar button svg { width: 18px; height: 18px; flex: none; }
+  .print-bar #clear-selection { margin-left: auto; }
+  .print-bar #print { margin-left: auto; background: #5c7e10; }
+  .print-bar #print:hover { background: #75b022; }
+  body.has-selection .print-bar #print { margin-left: 0; }
+  .print-bar .count { display: none; }
 
-  /* The print bar and finder stick to the top once scrolled past, trimmed to
-     their buttons. Above the card tools (z-index 2), below the toast. */
+  /* The print bar and finder stick to the top once scrolled past, folded into
+     one floating pill like the card tools: icon buttons, letters that scroll
+     sideways, and a search icon that opens into a box. Above the card tools
+     (z-index 2), below the toast. */
   .toolbar { position: sticky; top: 0; z-index: 3; margin: 0 -24px; padding: 0 24px; background: #1b2838; }
-  .toolbar.stuck { padding-top: 10px; padding-bottom: 10px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
-  .toolbar.stuck .print-bar { margin-bottom: 8px; padding: 6px 10px; }
-  .toolbar.stuck .print-bar button { padding: 6px 14px; }
-  .toolbar.stuck .finder { margin-bottom: 0; }
-  .toolbar.stuck #print-summary, .toolbar.stuck .print-bar a, .toolbar.stuck .finder .muted { display: none; }
+  .toolbar.stuck { padding-top: 10px; padding-bottom: 10px; margin-bottom: 16px; background: transparent; pointer-events: none; }
+  .toolbar.stuck > * { pointer-events: auto; }
   .toolbar.stuck .banner { margin-bottom: 8px; }
+  .toolbar.stuck .nav { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 99px; background: rgba(15,25,34,.85); backdrop-filter: blur(8px); box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  .toolbar.stuck .finder { order: 1; flex: 1; min-width: 0; flex-wrap: nowrap; gap: 6px; margin: 0; }
+  .toolbar.stuck .print-bar { order: 2; flex: none; flex-wrap: nowrap; gap: 4px; margin: 0; padding: 0; border: 0; }
+  .toolbar.stuck .print-bar .title, .toolbar.stuck #print-summary, .toolbar.stuck .print-bar a, .toolbar.stuck .finder .muted, .toolbar.stuck .print-bar .label { display: none; }
+  .toolbar.stuck .print-bar button { position: relative; width: 36px; height: 36px; padding: 0; margin: 0; border-radius: 99px; justify-content: center; }
+  .toolbar.stuck #clear-selection { background: transparent; }
+  .toolbar.stuck #clear-selection:hover { background: #3d6c8d; }
+  .toolbar.stuck .count:not(:empty) { display: grid; place-items: center; position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 99px; background: #66c0f4; color: #0f1922; font-size: 11px; font-weight: 800; }
+  .toolbar.stuck .letters { flex: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 2px; }
+  .toolbar.stuck .letters::-webkit-scrollbar { display: none; }
+  .toolbar.stuck .letters button { flex: none; min-width: 32px; height: 32px; padding: 0 6px; border: 0; border-radius: 99px; background: transparent; }
+  .toolbar.stuck .letters button:hover { background: #3d6c8d; }
+  .toolbar.stuck .letters button[aria-pressed="true"] { background: #66c0f4; color: #0f1922; }
+  .toolbar.stuck .search { flex: none; cursor: pointer; }
+  .toolbar.stuck .search svg { left: 9px; width: 18px; height: 18px; color: #fff; }
+  .toolbar.stuck .search input { width: 0; height: 36px; box-sizing: border-box; padding: 0 0 0 36px; border-color: transparent; border-radius: 99px; background: #2a475e; cursor: pointer; transition: width .25s ease, padding .25s ease; }
+  .toolbar.stuck .search input::placeholder { color: transparent; }
+  .toolbar.stuck .search:hover input { background: #3d6c8d; }
+  .toolbar.stuck .search:focus-within input, .toolbar.stuck .search input:not(:placeholder-shown) { width: min(220px, 45vw); padding-right: 12px; border-color: #3d6c8d; background: #0f1922; cursor: text; }
+  .toolbar.stuck .search:focus-within input::placeholder { color: #8fa9bd; }
+  @media (prefers-reduced-motion: reduce) { .toolbar.stuck .search input { transition: none; } }
 </style>
 </head>
 <body>
@@ -191,18 +220,20 @@
   <span>New card <code id="pending-uid"></code> on the base — click a game to link it.</span>
   <button id="cancel-link" title="Forget this card (Esc)">Cancel</button>
 </div>
+<div class="nav">
 <section class="print-bar" aria-label="Print settings">
   <span class="title">Print</span>
   <span id="print-summary"></span>
   <a href="/settings#printing" title="Change the template, sides and other print settings">Change</a>
-  <button id="print" title="Print the games shown, at 100% scale with margins set to None or Default">Print cards</button>
-  <button id="clear-selection" title="Clear the selection (Esc)">Clear selection</button>
+  <button id="clear-selection" title="Clear the selection (Esc)" aria-label="Clear selection"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg><span class="label">Clear selection</span></button>
+  <button id="print" title="Print the games shown, at 100% scale with margins set to None or Default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="6" y="14" width="12" height="7"/></svg><span class="label">Print cards</span><span class="count"></span></button>
 </section>
 <section class="finder" aria-label="Find games">
-  <input type="search" id="search" placeholder="Search games (Ctrl+K)" aria-label="Search games" autocomplete="off">
+  <label class="search" title="Search games (Ctrl+K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input type="search" id="search" placeholder="Search games (Ctrl+K)" aria-label="Search games" autocomplete="off"></label>
   <div class="letters" id="letters" role="group" aria-label="Jump to games starting with"></div>
   <span class="muted">Ctrl+click cards to select them for printing.</span>
 </section>
+</div>
 </div>
 <div id="toolbar-spacer"></div>
 <div class="grid" id="grid"></div>
@@ -502,7 +533,10 @@
   }
   function syncSelection() {
     document.body.classList.toggle("has-selection", selected.size > 0);
-    document.getElementById("print").textContent = selected.size ? `Print ${selected.size} selected` : "Print cards";
+    const print = document.getElementById("print");
+    print.querySelector(".label").textContent = selected.size ? `Print ${selected.size} selected` : "Print cards";
+    print.querySelector(".count").textContent = selected.size || "";
+    print.setAttribute("aria-label", print.querySelector(".label").textContent);
     for (const [id, el] of Object.entries(cardEls)) {
       const title = selected.has(id) && selected.size > 1 ? `Print the ${selected.size} selected cards` : "Print this card";
       el.querySelector(".print-one").title = title;
