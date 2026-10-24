@@ -11,7 +11,7 @@ LDFLAGS := -H=windowsgui -s -w -X main.version=$(VERSION) -X main.updateRepo=$(R
 
 DIST := dist
 
-.PHONY: build install vet release
+.PHONY: build install reload vet release
 build:
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o steam-launcher.exe .
 
@@ -21,6 +21,15 @@ vet:
 install: build
 	mkdir -p "$(INSTALL_DIR)"
 	cp steam-launcher.exe "$(INSTALL_DIR)/"
+
+# Builds first so a failed build leaves the running copy alone, then stops it,
+# installs, and starts the new copy with its window open on the QR page.
+reload: build
+	-taskkill.exe /IM steam-launcher.exe /F >/dev/null 2>&1
+	mkdir -p "$(INSTALL_DIR)"
+	@for i in $$(seq 20); do cp steam-launcher.exe "$(INSTALL_DIR)/" 2>/dev/null && break; sleep 1; done
+	cmp -s steam-launcher.exe "$(INSTALL_DIR)/steam-launcher.exe" || { echo "couldn't replace the installed exe"; exit 1; }
+	cd /mnt/c && powershell.exe -NoProfile -Command "Start-Process -FilePath '$$(wslpath -w "$(INSTALL_DIR)/steam-launcher.exe")' -ArgumentList '--show','/'"
 
 # make release VERSION=v0.3.0         (stable)
 # make release VERSION=v0.3.0-beta.1  (pre-release, only offered on the beta channel)
