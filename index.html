@@ -38,7 +38,10 @@
   .art-body { display: flex; gap: 20px; align-items: flex-start; }
   .art-list { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; max-height: calc(100vh - 200px); overflow: auto; padding: 4px; }
   .art-list button { display: flex; flex-direction: column; gap: 4px; padding: 6px; background: #0f1922; border: 2px solid transparent; text-align: left; font-size: 11px; line-height: 1.3; }
-  .art-list button[hidden] { display: none; }
+  .art-list .tile { position: relative; display: grid; }
+  .art-list .tile[hidden] { display: none; }
+  .art-list button.del { position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 99px; background: rgba(15,25,34,.85); color: #fff; font-size: 16px; line-height: 1; display: grid; place-items: center; }
+  .art-list button.del:hover { background: #c94b4b; }
   .art-list button:hover { background: #2a475e; }
   .art-list button[aria-pressed="true"] { border-color: #66c0f4; }
   .art-list img { width: 100%; height: 120px; object-fit: contain; background: #000; border-radius: 4px; }
@@ -52,6 +55,9 @@
   .art-preview.dragging { cursor: grabbing; }
   .art-preview .pcard { position: absolute; inset: 0; }
   .art-preview img { -webkit-user-drag: none; }
+  .art-preview img.logo, .art-preview .title { cursor: move; }
+  .art-logo-row { display: flex; align-items: center; gap: 8px; }
+  .art-logo-row button { padding: 2px 8px; font-size: 12px; }
   .art-side label { cursor: pointer; }
   .art-zoom { display: flex; align-items: center; gap: 6px; }
   .art-zoom button { width: 28px; padding: 4px 0; font-weight: 700; }
@@ -201,7 +207,11 @@
         <output id="art-zoom-val" for="art-zoom">1.0×</output>
       </div>
       <span id="art-dpi" class="muted"></span>
-      <label><input type="checkbox" id="art-logo"> Game logo over the art</label>
+      <div class="art-logo-row">
+        <label><input type="checkbox" id="art-logo"> Game logo over the art</label>
+        <button type="button" id="art-logo-reset" title="Put the logo back along the bottom" hidden>Reset</button>
+      </div>
+      <span class="muted">Drag the logo to move it.</span>
       <button type="button" id="art-upload" title="Use an image from this PC; you can also drop one on this window">Upload an image…</button>
       <input type="file" id="art-file" accept="image/jpeg,image/png,image/webp" hidden>
     </div>
@@ -512,7 +522,9 @@
     const CDN = `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}`;
     const cdn = (...files) => el.dataset.store === "steam" ? files.map(f => `${CDN}/${f}`) : [];
     const addLogo = async () => {
-      if (!await loadImg(img("logo"), `/art/${id}/logo`, ...cdn("logo.png"))) pc.append(div("title", el.querySelector(".name").textContent));
+      const logo = img("logo");
+      if (await loadImg(logo, `/art/${id}/logo`, ...cdn("logo.png"))) placeLogo(logo, choice?.logoPos);
+      else placeLogo(pc.appendChild(div("title", el.querySelector(".name").textContent)), choice?.logoPos);
     };
     waits.push((async () => {
       if (choice) {
@@ -531,6 +543,15 @@
       await addLogo();
     })());
     return pc;
+  }
+
+  // placeLogo centres the logo (or the name standing in for it) on a point
+  // of the card, "x% y%"; the name only moves up and down.
+  function placeLogo(el, logoPos) {
+    if (!logoPos) return;
+    const [x, y] = logoPos.split(" ").map(parseFloat);
+    if (el.matches("img.logo")) Object.assign(el.style, { left: `${x - 42}%`, top: `${y - 15}%`, right: "auto", bottom: "auto", objectPosition: "center" });
+    else Object.assign(el.style, { top: `${y}%`, bottom: "auto", transform: "translateY(-50%)" });
   }
 
   // The card's portrait size in inches on the chosen template; turned cards
@@ -561,14 +582,27 @@
     list.replaceChildren(div("note", "Loading images…"));
     artDlg.showModal();
     showPreview();
-    const seen = new Map(); // src → its button
-    // add lists an image, first after the note or else last, and gives its button.
+    const seen = new Map(); // src → its tile
+    // add lists an image, first after the note or else last. Uploads can be deleted.
     const add = ({ src, label }, first) => {
-      if (seen.has(src)) return seen.get(src);
+      if (seen.has(src)) return;
+      const tile = div("tile");
+      tile.hidden = true; // until the image loads
       const b = document.createElement("button");
       b.type = "button";
       b.dataset.src = src;
-      b.hidden = true; // until the image loads
+      tile.append(b);
+      if (src.startsWith(`/art/${id}/upload?`)) {
+        const del = Object.assign(document.createElement("button"), { type: "button", className: "del", textContent: "×", title: "Delete this upload" });
+        del.setAttribute("aria-label", "Delete this upload");
+        del.addEventListener("click", async () => {
+          if (await deleteUpload(src)) {
+            tile.remove();
+            seen.delete(src);
+          }
+        });
+        tile.append(del);
+      }
       const im = document.createElement("img");
       const res = div("res");
       b.append(im, div("", label), res);
@@ -576,17 +610,16 @@
         const dpi = Math.round(Math.min(im.naturalWidth / cw, im.naturalHeight / ch));
         res.innerHTML = `${im.naturalWidth} × ${im.naturalHeight} · ${qualityBadge(dpi)}`;
         res.title = `About ${dpi} dpi on this card`;
-        b.hidden = false;
+        tile.hidden = false;
       };
-      im.onerror = () => b.remove();
+      im.onerror = () => { tile.remove(); seen.delete(src); };
       im.src = src;
       b.setAttribute("aria-pressed", picking.choice?.src === src);
       b.addEventListener("click", () => choose(src, $("art-logo").checked));
-      seen.set(src, b);
+      seen.set(src, tile);
       const note = list.querySelector(".note");
-      if (first && note) note.after(b);
-      else list.append(b);
-      return b;
+      if (first && note) note.after(tile);
+      else list.append(tile);
     };
     picking.add = add;
     const get = async path => {
@@ -607,16 +640,19 @@
     }
   }
 
-  // choose makes an image the choice, filling the card from its middle.
+  // choose makes an image the choice, filling the card from its middle. A
+  // logo that was moved stays where it was put.
   function choose(src, logo) {
-    picking.choice = { src, pos: "", logo };
-    for (const o of $("art-list").querySelectorAll("button")) o.setAttribute("aria-pressed", o.dataset.src === src);
+    const logoPos = picking.choice?.logoPos;
+    picking.choice = { src, pos: "", logo, ...(logoPos && { logoPos }) };
+    for (const o of $("art-list").querySelectorAll("button[data-src]")) o.setAttribute("aria-pressed", o.dataset.src === src);
     showPreview();
   }
 
   function showPreview() {
     const box = $("art-preview"), waits = [];
     $("art-logo").checked = !!picking.choice?.logo;
+    $("art-logo-reset").hidden = !(picking.choice?.logo && picking.choice.logoPos);
     box.replaceChildren(artCard(picking.id, cardEls[picking.id], {}, waits, picking.choice));
     box.classList.toggle("movable", !!picking);
     showZoom();
@@ -653,6 +689,29 @@
     e.preventDefault();
     setZoom((picking.choice?.zoom || 1) * Math.exp(-e.deltaY * 0.002));
   }, { passive: false });
+
+  // deleteUpload removes an uploaded image from this PC, after asking; a game
+  // saved with it goes back to automatic art. True once it's gone.
+  async function deleteUpload(src) {
+    if (!confirm("Delete this uploaded image from this PC?")) return false;
+    const id = picking.id, name = new URL(src, location.href).searchParams.get("f");
+    try {
+      const res = await fetch(`/api/art/${id}/upload?f=${encodeURIComponent(name)}`, { method: "DELETE", headers: { "X-Key": KEY } });
+      if (!res.ok) throw new Error((await res.text()).trim());
+      const wasSaved = ART[id]?.src === src;
+      ART = await res.json();
+      cardEls[id].classList.toggle("custom-art", !!ART[id]);
+      if (picking?.id === id && picking.choice?.src === src) {
+        picking.choice = null;
+        showPreview();
+      }
+      toast(wasSaved ? "Deleted the upload. This game is back to automatic art." : "Deleted the upload.");
+      return true;
+    } catch (err) {
+      toast(`Couldn't delete the upload: ${err.message}`, true);
+      return false;
+    }
+  }
 
   // Uploads are stored on this PC, listed first and chosen with the logo
   // over them, since bare art is usually what gets uploaded.
@@ -701,18 +760,45 @@
     if (!art?.naturalWidth) return false;
     picking.choice = { src: art.getAttribute("src"), pos: "", logo: !!box.querySelector("img.logo, .title") };
     $("art-logo").checked = picking.choice.logo;
-    for (const o of $("art-list").querySelectorAll("button")) o.setAttribute("aria-pressed", o.dataset.src === picking.choice.src);
+    for (const o of $("art-list").querySelectorAll("button[data-src]")) o.setAttribute("aria-pressed", o.dataset.src === picking.choice.src);
     return true;
   }
 
   // Dragging the preview pans the picked art inside the card. The art is
   // cropped to fill it, so it moves only along the side that overflows, by
   // object-position: 0% shows one edge of the image, 100% the other.
+  // Dragging the logo moves its middle around the card, keeping it all on
+  // the card.
   let drag = null;
   $("art-preview").addEventListener("pointerdown", e => {
     const art = e.currentTarget.querySelector("img.hero");
     if (!picking || !adoptShown()) return;
     const box = e.currentTarget.getBoundingClientRect();
+    const logo = e.target.closest("img.logo, .title");
+    let r, w, h, cy;
+    if (logo) {
+      r = logo.getBoundingClientRect();
+      // The logo image fits inside its box, along the bottom until it's moved.
+      [w, h, cy] = [r.width, r.height, r.top + r.height / 2];
+      if (logo.matches("img.logo")) {
+        const ar = logo.naturalWidth / logo.naturalHeight;
+        w = Math.min(r.width, r.height * ar);
+        h = w / ar;
+        if (!picking.choice.logoPos) cy = r.bottom - h / 2;
+      }
+    }
+    // Only the logo itself grabs it; around it, the art pans.
+    if (logo && Math.abs(e.clientX - (r.left + r.width / 2)) <= w / 2 && Math.abs(e.clientY - cy) <= h / 2) {
+      drag = {
+        logo, box, startX: e.clientX, startY: e.clientY,
+        x: (r.left + r.width / 2 - box.left) / box.width * 100, y: (cy - box.top) / box.height * 100,
+        halfW: w / 2 / box.width * 100, halfH: h / 2 / box.height * 100,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.currentTarget.classList.add("dragging");
+      e.preventDefault();
+      return;
+    }
     const scale = Math.max(box.width / art.naturalWidth, box.height / art.naturalHeight) * (picking.choice.zoom || 1);
     const [x, y] = (picking.choice.pos || "50% 50%").split(" ").map(parseFloat);
     drag = {
@@ -726,6 +812,15 @@
   });
   $("art-preview").addEventListener("pointermove", e => {
     if (!drag) return;
+    if (drag.logo) {
+      const clamp = (v, half) => Math.min(100 - half, Math.max(half, v));
+      const x = clamp(drag.x + (e.clientX - drag.startX) / drag.box.width * 100, drag.halfW);
+      const y = clamp(drag.y + (e.clientY - drag.startY) / drag.box.height * 100, drag.halfH);
+      picking.choice.logoPos = `${Math.round(x * 10) / 10}% ${Math.round(y * 10) / 10}%`;
+      placeLogo(drag.logo, picking.choice.logoPos);
+      $("art-logo-reset").hidden = false;
+      return;
+    }
     const pan = (start, delta, over) => over < 1 ? start : Math.min(100, Math.max(0, start - delta / over * 100));
     const x = pan(drag.x, e.clientX - drag.startX, drag.overX), y = pan(drag.y, e.clientY - drag.startY, drag.overY);
     picking.choice.pos = `${Math.round(x * 10) / 10}% ${Math.round(y * 10) / 10}%`;
@@ -741,6 +836,10 @@
     const logo = $("art-logo").checked;
     if (!adoptShown()) return $("art-logo").checked = false;
     picking.choice.logo = logo;
+    showPreview();
+  });
+  $("art-logo-reset").addEventListener("click", () => {
+    delete picking.choice.logoPos;
     showPreview();
   });
   async function saveArt(choice) {

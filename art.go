@@ -21,12 +21,14 @@ import (
 // ArtChoice is the art picked for a game's printed side A, in place of the
 // automatic choice: an image URL, the point of it kept in view when it's
 // cropped to the card ("50% 30%"), how far it's zoomed in past filling the
-// card (0 or 1 is not at all), and whether the logo goes over it.
+// card (0 or 1 is not at all), whether the logo goes over it, and where the
+// logo's middle sits on the card ("50% 80%"; empty is along the bottom).
 type ArtChoice struct {
-	Src  string  `json:"src"`
-	Pos  string  `json:"pos,omitempty"`
-	Zoom float64 `json:"zoom,omitempty"`
-	Logo bool    `json:"logo,omitempty"`
+	Src     string  `json:"src"`
+	Pos     string  `json:"pos,omitempty"`
+	Zoom    float64 `json:"zoom,omitempty"`
+	Logo    bool    `json:"logo,omitempty"`
+	LogoPos string  `json:"logoPos,omitempty"`
 }
 
 // ArtChoices keeps the picked art per appid, saved in
@@ -293,6 +295,27 @@ func (s *Server) uploadArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, artCandidate{"/art/" + appID + "/upload?f=" + name, "Uploaded image"})
+}
+
+// deleteUpload removes an uploaded image, /api/art/{appid}/upload?f=<name>.
+// A game whose saved art it was goes back to automatic art.
+func (s *Server) deleteUpload(w http.ResponseWriter, r *http.Request) {
+	appID, name := r.PathValue("appid"), r.URL.Query().Get("f")
+	if !slices.Contains(uploadedArt(appID), name) {
+		http.NotFound(w, r)
+		return
+	}
+	if err := os.Remove(filepath.Join(uploadDir(appID), name)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if s.artChoices.All()[appID].Src == "/art/"+appID+"/upload?f="+name {
+		if err := s.artChoices.Set(appID, ArtChoice{}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	writeJSON(w, s.artChoices.All())
 }
 
 // writeUpload writes the image beside its name and then renames it, so a

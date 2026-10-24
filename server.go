@@ -56,6 +56,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/art/{appid}/screenshots", s.localAPI(s.artScreenshots))
 	mux.HandleFunc("POST /api/art/{appid}", s.localAPI(s.saveArt))
 	mux.HandleFunc("POST /api/art/{appid}/upload", s.localAPI(s.uploadArt))
+	mux.HandleFunc("DELETE /api/art/{appid}/upload", s.localAPI(s.deleteUpload))
 	mux.HandleFunc("POST /api/launch/{appid}", s.localAPI(s.launchLocal))
 	mux.HandleFunc("GET /api/settings", s.localAPI(s.getSettings))
 	mux.HandleFunc("POST /api/settings", s.localAPI(s.saveSettings))
