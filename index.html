@@ -297,6 +297,9 @@
   let toastTimer;
   function toast(message, error) {
     const el = document.getElementById("toast");
+    // An open dialog sits above the page, so the toast moves into it to be seen.
+    const host = document.querySelector("dialog[open]") || document.body;
+    if (el.parentElement !== host) host.append(el);
     el.textContent = message;
     el.classList.toggle("error", !!error);
     el.classList.add("show");

@@ -247,7 +247,7 @@ func uploadedArt(appID string) []string {
 		if e.IsDir() || !slices.Contains([]string{".jpg", ".png", ".webp"}, filepath.Ext(e.Name())) {
 			continue
 		}
-		if fi, err := e.Info(); err == nil {
+		if fi, err := e.Info(); err == nil && fi.Size() > 0 {
 			files = append(files, file{e.Name(), fi.ModTime().UnixNano()})
 		}
 	}
@@ -288,11 +288,31 @@ func (s *Server) uploadArt(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := os.WriteFile(filepath.Join(uploadDir(appID), name), b, 0o644); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := writeUpload(filepath.Join(uploadDir(appID), name), b); err != nil {
+		http.Error(w, "Couldn't save the image on this PC: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, artCandidate{"/art/" + appID + "/upload?f=" + name, "Uploaded image"})
+}
+
+// writeUpload writes the image beside its name and then renames it, so a
+// failed write (a full disk, say) leaves nothing behind to be listed.
+func writeUpload(path string, b []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "upload-*.tmp")
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(b)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	if err != nil {
+		os.Remove(f.Name())
+	}
+	return err
 }
 
 // serveUploadedArt serves /art/{appid}/upload?f=<name>, but only a name that
