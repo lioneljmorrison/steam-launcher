@@ -95,6 +95,10 @@
   .card .link button:hover { background: #c94b4b; color: #fff; }
   body.linking .card { cursor: pointer; outline: 3px solid transparent; transition: outline-color .15s; }
   body.linking .card:hover { outline-color: #e8a33d; }
+  /* While linking, games that already have a card go in a group at the end. */
+  .group-label { display: none; grid-column: 1 / -1; order: 1; margin-top: 8px; padding-top: 14px; border-top: 1px solid #2a475e; color: #8fa9bd; font-weight: 600; }
+  body.linking .grid:has(.card.linked:not(.filtered)) .group-label { display: block; }
+  body.linking .card.linked { order: 2; opacity: .75; }
   .banner { display: none; margin: 0 0 20px; padding: 14px 18px; border-radius: 10px; background: #e8a33d; color: #1b2838; font-weight: 600; }
   body.linking .banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
   .banner code { font-size: 15px; }
@@ -340,6 +344,7 @@
     grid.appendChild(card);
     cardEls[id] = card;
   }
+  grid.append(Object.assign(document.createElement("div"), { className: "group-label", textContent: "Already linked" }));
 
   let toastTimer;
   function toast(message, error) {
@@ -376,10 +381,22 @@
     if (res.ok) render(await res.json());
   }
 
+  // Polled every second, so the cards only animate into their groups when
+  // linking starts or stops, or the linked games change while it's on.
+  let groupKey = "";
   function render({ pending: p, cards }) {
     pending = p;
-    document.body.classList.toggle("linking", !!p);
     document.getElementById("pending-uid").textContent = p ? p.uid : "";
+    const linked = new Set(cards.map(c => c.appid));
+    const regroup = () => {
+      document.body.classList.toggle("linking", !!p);
+      for (const [id, el] of Object.entries(cardEls)) {
+        el.classList.toggle("linked", linked.has(id));
+        el.title = p ? `Click to link card ${p.uid} to this game` : SELECT_TIP;
+      }
+    };
+    const key = p ? [...linked].sort().join() + "|linking" : "";
+    if (key !== groupKey) { groupKey = key; rearrange(regroup); } else regroup();
 
     const byApp = {};
     for (const c of cards) (byApp[c.appid] ||= []).push(c.uid);
