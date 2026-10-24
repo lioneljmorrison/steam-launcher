@@ -171,8 +171,12 @@
      one floating pill like the card tools: icon buttons, letters that scroll
      sideways, and a search icon that opens into a box. Above the card tools
      (z-index 2), below the toast. */
+  /* No scroll anchoring: measuring the toolbar as it sticks lays the page out
+     mid-change, and Chrome would scroll to follow the cards, unsticking it.
+     The spacer below keeps the page still instead. */
+  html { overflow-anchor: none; }
   .toolbar { position: sticky; top: 0; z-index: 3; margin: 0 -24px; padding: 0 24px; background: #1b2838; }
-  .toolbar.stuck { padding-top: 10px; padding-bottom: 10px; margin-bottom: 16px; background: transparent; pointer-events: none; }
+  .toolbar.stuck { padding-top: 10px; padding-bottom: 10px; background: transparent; pointer-events: none; }
   .toolbar.stuck > * { pointer-events: auto; }
   .toolbar.stuck .banner { margin-bottom: 8px; }
   .toolbar.stuck .nav { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 99px; background: rgba(15,25,34,.85); backdrop-filter: blur(8px); box-shadow: 0 6px 20px rgba(0,0,0,.4); }
@@ -453,9 +457,10 @@
   // doesn't move; otherwise scroll anchoring pulls the page up, unsticking it.
   const spacer = document.getElementById("toolbar-spacer");
   new IntersectionObserver(([e]) => {
-    const full = toolbar.offsetHeight;
+    spacer.style.height = "";
+    const before = grid.offsetTop;
     toolbar.classList.toggle("stuck", !e.isIntersecting);
-    spacer.style.height = e.isIntersecting ? "" : `${Math.max(0, full - toolbar.offsetHeight)}px`;
+    if (!e.isIntersecting) spacer.style.height = `${Math.max(0, before - grid.offsetTop)}px`;
   }).observe(document.getElementById("toolbar-sentinel"));
   function toGridTop() {
     if (!toolbar.classList.contains("stuck")) return;
