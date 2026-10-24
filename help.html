@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cardtridge™ Help</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #1b2838; color: #c7d5e0; margin: 0; padding: 24px; line-height: 1.55; }
+  main { max-width: 760px; }
+  h1 { margin: 0 0 4px; color: #fff; }
+  h2 { margin: 36px 0 10px; padding-top: 18px; border-top: 1px solid #2a475e; color: #fff; font-size: 20px; }
+  h3 { margin: 22px 0 6px; color: #fff; font-size: 16px; }
+  a { color: #66c0f4; }
+  p.sub { margin: 0 0 20px; opacity: .7; font-size: 14px; }
+  p, li { font-size: 15px; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  code, kbd { color: #fff; }
+  kbd { padding: 1px 6px; border: 1px solid #3d6c8d; border-radius: 4px; background: #0f1922; font: inherit; font-size: 13px; }
+  .toc { columns: 2 220px; padding: 14px 18px 14px 36px; border: 1px solid #2a475e; border-radius: 10px; }
+  .toc li { margin: 2px 0; }
+  .note { padding: 12px 16px; border-left: 4px solid #e8a33d; border-radius: 6px; background: #0f1922; }
+  .note b { color: #e8a33d; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid #2a475e; }
+  th { color: #fff; font-weight: 600; }
+  .swatch { display: inline-block; width: 11px; height: 11px; margin-right: 6px; border-radius: 99px; vertical-align: -1px; }
+  details { margin: 0 0 8px; border: 1px solid #2a475e; border-radius: 10px; }
+  summary { padding: 10px 16px; color: #fff; font-weight: 600; cursor: pointer; }
+  summary:hover { background: #0f1922; border-radius: 10px; }
+  details[open] summary { border-bottom: 1px solid #2a475e; border-radius: 10px 10px 0 0; }
+  details > :not(summary) { margin-left: 16px; margin-right: 16px; }
+  @media (max-width: 640px) { body { padding: 16px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Help</h1>
+  <p class="sub"><a href="/">← Back to games</a> · <a href="/settings">Settings</a></p>
+
+  <p>Cardtridge™ turns physical things into game cartridges. Scan a printed card, tap an NFC card, or plug in a USB stick or memory card, and the game it stands for starts on this PC. It works with your installed Steam, GOG and Epic games, and runs in the system tray.</p>
+
+  <ul class="toc">
+    <li><a href="#ways">Ways to launch a game</a></li>
+    <li><a href="#games">The games page</a></li>
+    <li><a href="#linking">Linking a card to a game</a></li>
+    <li><a href="#nfc">NFC cards</a></li>
+    <li><a href="#drives">USB sticks, SD and CF cards</a></li>
+    <li><a href="#on-drive">Installing a game on the drive</a></li>
+    <li><a href="#readers">Card readers</a></li>
+    <li><a href="#qr">QR codes and phones</a></li>
+    <li><a href="#scanner">Barcode scanners</a></li>
+    <li><a href="#printing">Printing cards</a></li>
+    <li><a href="#settings">Settings</a></li>
+    <li><a href="#tray">The tray icon</a></li>
+    <li><a href="#faq">FAQ and troubleshooting</a></li>
+  </ul>
+
+  <h2 id="ways">Ways to launch a game</h2>
+  <table>
+    <tr><th>What you use</th><th>What you do</th><th>Setup</th></tr>
+    <tr><td>Phone</td><td>Scan the QR code on a printed card with the camera.</td><td>Phone on the same network as the PC.</td></tr>
+    <tr><td>Barcode scanner</td><td>Scan the QR code on a printed card.</td><td>Pair a Bluetooth scanner in serial (SPP) mode.</td></tr>
+    <tr><td>NFC card</td><td>Put the card on a Disney Infinity base.</td><td><a href="#linking">Link</a> the card to a game once.</td></tr>
+    <tr><td>USB stick, SD or CF card</td><td>Plug it in or insert it in a card reader.</td><td><a href="#linking">Link</a> it to a game once, or <a href="#on-drive">install the game on it</a>.</td></tr>
+    <tr><td>This PC</td><td>Click the play button on a game in the games page.</td><td>None.</td></tr>
+  </table>
+  <p>Only installed games can be launched. A game that's launched twice within 10 seconds starts once, so a card that's read twice doesn't open two copies.</p>
+
+  <h2 id="games">The games page</h2>
+  <p>Click the tray icon to open it. Every installed game is shown with its art; GOG and Epic games carry a badge.</p>
+  <ul>
+    <li><b>Find a game:</b> the search icon (<kbd>Ctrl</kbd>+<kbd>K</kbd>), the letters, and the store filter. The slider sets the card size.</li>
+    <li><b>Game buttons:</b> hover the round button at the top right of a game for <i>Play</i>, <i>Show QR code</i>, <i>Choose the printed art</i> and <i>Print this card</i>.</li>
+    <li><b>Linked cards</b> show under the game's name. A wave icon is an NFC card; a card icon is a USB stick, SD card or CF card. Click <b>×</b> to unlink one.</li>
+    <li><b>New games</b> appear when Cardtridge starts, when a drive is plugged in, or when you pick <i>Rescan games</i> in the tray menu.</li>
+  </ul>
+  <p>Steam games start through Steam. GOG games start their own exe. Epic games start through the Epic Games Launcher, so you may need to be signed in to it. Cardtridge brings GOG and Epic games to the front once their window opens.</p>
+
+  <h2 id="linking">Linking a card to a game</h2>
+  <p>NFC cards, USB sticks, SD cards and CF cards are all linked the same way:</p>
+  <ol>
+    <li>Open the games page.</li>
+    <li>Put the NFC card on the base, or plug in the stick or card.</li>
+    <li>An orange banner says <i>New card … — click a game to link it.</i> Games that already have a card move to the end.</li>
+    <li>Click the game. From now on, that card launches it.</li>
+  </ol>
+  <p>A new card waits 2 minutes to be linked. Press <kbd>Esc</kbd> or click <i>Cancel</i> to forget it. Each card launches one game, but a game can have as many cards as you like. Unlinking a card and inserting it again lets you link it to a different game.</p>
+  <p>Links are kept in <code>%APPDATA%\cardtridge\cards.json</code>, so they stay on this PC. On another PC, cards need linking again.</p>
+
+  <h2 id="nfc">NFC cards</h2>
+  <p>NFC cards are read by a Disney Infinity base: the Wii and PlayStation versions, which show up as USB device <code>0E6F:0129</code>. The Xbox 360 base can't be used. Plug the base in any time; the tray menu shows whether it's connected.</p>
+  <p>Most NFC stickers, cards and key fobs work, as do Disney Infinity figures and discs. Phones, watches and bank cards don't, because they show a different ID every time they're read.</p>
+  <p>The pad under a card lights up:</p>
+  <table>
+    <tr><td><span class="swatch" style="background:#3fbf3f"></span>Green</td><td>The linked game is launching.</td></tr>
+    <tr><td><span class="swatch" style="background:#e8a33d"></span>Orange</td><td>A new card, waiting to be linked on the games page.</td></tr>
+    <tr><td><span class="swatch" style="background:#d94040"></span>Red</td><td>The card couldn't be read, or its game isn't installed.</td></tr>
+  </table>
+  <p>The base reconnects by itself after the PC sleeps.</p>
+
+  <h2 id="drives">USB sticks, SD and CF cards</h2>
+  <p>A USB stick, SD card or CF card can be a cartridge without anything installed on it. Plug it in, <a href="#linking">link it</a>, and from then on plugging it in launches the game from this PC. The drive only carries an ID.</p>
+  <ul>
+    <li><b>The ID is the drive's volume serial number,</b> which is set when it's formatted. <b>Formatting the drive gives it a new ID</b>, so it has to be linked again.</li>
+    <li><b>Cards formatted by a camera</b> often all share the serial 0000-0000. Cardtridge then gives the card its own ID by writing a small hidden file, <code>cardtridge-id</code>, to it. Leave the file there; deleting it makes the card new again. A card that's locked (the switch on the side of an SD card) can't be given an ID.</li>
+    <li>Card IDs start with <code>SD-</code> whichever kind of drive they're on.</li>
+    <li>External SSDs and hard drives that Windows treats as fixed disks can't be linked; they can still launch a game <a href="#on-drive">installed on them</a>.</li>
+  </ul>
+  <p>Drive launching can be turned off in <a href="/settings">Settings</a> under <i>USB drives</i>.</p>
+
+  <h2 id="on-drive">Installing a game on the drive</h2>
+  <p>If you need the extra storage, a drive can hold the game itself. Plugging it in then launches the game installed on it, with no linking needed.</p>
+  <ol>
+    <li>In Steam, open <i>Settings → Storage</i>, add a library on the drive, and install <b>one</b> game to it.</li>
+    <li>Plug the drive in. Cardtridge adds the game to the list and launches it.</li>
+  </ol>
+  <ul>
+    <li>Only Steam games work this way. A drive with more than one game is left alone.</li>
+    <li>Steam remembers the library by its drive letter, so the drive has to come back as the same letter. If it doesn't, assign it a fixed letter in Windows' <i>Disk Management</i>.</li>
+    <li>A linked card launches its linked game, even if it also has a game installed.</li>
+  </ul>
+  <div class="note"><b>Performance will be what it is.</b> The game loads from the drive, so it's only as fast as the drive and the port. An external SSD on USB 3 is close to an internal drive. USB sticks are slower, and SD and CF cards slower still, which shows as long loading screens and stutter in games that stream from disk. Small or older games are the best fit. Don't remove a drive while its game is running; the game will crash and may lose its save.</div>
+
+  <h2 id="readers">Card readers</h2>
+  <div class="note"><b>SD and CF card readers are flaky at best.</b> Cardtridge launches a card as soon as Windows sees it, so when a card doesn't launch, it's almost always because Windows hasn't seen it yet.</div>
+  <ul>
+    <li><b>Eject cards before removing them.</b> Use <i>Eject</i> in File Explorer or <i>Safely remove hardware</i> in the taskbar. Pulling a card out can corrupt it, and a reader can stop noticing new cards after a card is pulled mid-read.</li>
+    <li><b>If the reader stops seeing cards, reset it:</b> unplug the reader from the USB port, wait a few seconds, and plug it back in. Use a port on the PC itself rather than a hub if it keeps happening.</li>
+    <li><b>Some cards take a few seconds to appear.</b> Windows has to read the card before it gets a drive letter, and slow, large or nearly full cards take longer. Cards with a damaged file system can take much longer, or Windows may offer to scan and fix them.</li>
+    <li><b>Older readers can't read newer cards.</b> Cards over 32 GB are SDXC, and many older readers, including some SanDisk ImageMate models, don't support them. The reader's light may come on while Windows shows nothing.</li>
+    <li>Readers with several slots show a drive letter for each slot even when it's empty. That's normal.</li>
+  </ul>
+  <p>To check whether it's the reader or Cardtridge, look for the card in File Explorer. If File Explorer doesn't show it, Cardtridge can't either.</p>
+
+  <h2 id="qr">QR codes and phones</h2>
+  <p>Each game's QR code is a web link to this PC. Scanning it with a phone opens the link, and the game starts on the PC. The phone needs to be on the same network, and Windows Firewall has to let the connection through; the first time Cardtridge runs, Windows asks, and you should allow private networks.</p>
+  <p>The link includes this PC's address, its port and a secret key, so a code only works for this PC. <b>If the PC's address or the port changes, printed codes stop working.</b> Give the PC a fixed address in your router, and reprint cards after changing either in Settings. <i>Check address and port</i> in Settings tests both with your phone.</p>
+
+  <h2 id="scanner">Barcode scanners</h2>
+  <p>A QR barcode scanner can launch games without a phone. Set it to serial mode (SPP) and pair it with Windows over Bluetooth. Cardtridge connects to paired devices whose name contains <i>scan</i> or <i>barcode</i>, and the tray menu shows when it's connected. For other names, or a scanner on a USB COM port, change the scanner settings in <a href="/settings">Settings</a>.</p>
+  <p>A scanner reads the QR codes Cardtridge prints, <code>steam://rungameid/…</code> links, and bare game IDs.</p>
+
+  <h2 id="printing">Printing cards</h2>
+  <p>Cardtridge prints cards to slide into sleeves or stick on NFC cards. Choose the template, sides and options in <a href="/settings">Settings</a>:</p>
+  <ul>
+    <li><b>Templates:</b> Avery 28877 and 5371 business cards, credit card size, trading card size, top loader size, and LabelLife 3 × 2 in thermal labels.</li>
+    <li><b>Side A</b> is the game's art and logo; <b>side B</b> has its details and tags, with the QR code if it's turned on. Print both, one or the other, or both on one sheet to cut out and glue back to back.</li>
+  </ul>
+  <p>On the games page, the print button in the nav prints every game shown. <kbd>Ctrl</kbd>+click games to select them and print just those, or use <i>Print this card</i> on one game.</p>
+  <p><i>Choose the printed art</i> picks side A's image from the store's art, screenshots or your own upload (drop an image on the window). Drag and zoom to choose the crop, and turn the logo on or off. Quality badges show whether the image is sharp enough at the printed size.</p>
+
+  <h2 id="settings">Settings</h2>
+  <table>
+    <tr><td><b>Printing</b></td><td>The template, sides and options above. Saved as you change them.</td></tr>
+    <tr><td><b>Network</b></td><td>The port and the address used in QR codes, and a test with your phone.</td></tr>
+    <tr><td><b>Bluetooth scanner</b></td><td>Find scanners automatically, use a fixed COM port, or turn scanners off.</td></tr>
+    <tr><td><b>NFC base</b></td><td>Turn the Disney Infinity base on or off.</td></tr>
+    <tr><td><b>USB drives</b></td><td>Turn launching from USB drives, SD cards and CF cards on or off.</td></tr>
+    <tr><td><b>Updates</b></td><td>Stable or beta releases, and checking for and installing updates.</td></tr>
+  </table>
+  <p>Everything except printing takes effect after <i>Save and restart</i>.</p>
+
+  <h2 id="tray">The tray icon</h2>
+  <p>Cardtridge runs in the system tray. Closing its window hides it; it keeps launching games. Click the icon to open the games page, or right-click it for the menu:</p>
+  <ul>
+    <li>The NFC base and scanner status.</li>
+    <li><i>Open QR page</i>, <i>Settings…</i></li>
+    <li><i>Rescan games</i>: look for games installed or removed since Cardtridge started.</li>
+    <li><i>Open log folder</i>: the log of everything Cardtridge has done, useful when something doesn't work.</li>
+    <li><i>Check for updates</i>, <i>Start with Windows</i>, and <i>Quit</i>.</li>
+  </ul>
+
+  <h2 id="faq">FAQ and troubleshooting</h2>
+
+  <details>
+    <summary>I inserted a card and nothing happened.</summary>
+    <ul>
+      <li>Check that the card shows in File Explorer. If it doesn't, see <a href="#readers">Card readers</a>: eject cards properly, reset the reader, and make sure the reader supports the card.</li>
+      <li>Open the games page; if the card isn't linked yet, the orange banner should be waiting for you to pick a game.</li>
+      <li>Check that <i>USB drives</i> is on in Settings.</li>
+      <li>Look in the log (<i>Open log folder</i> in the tray menu) for a <code>card … inserted</code> line.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>A card I linked before is showing up as new.</summary>
+    <p>The card was formatted, which gives it a new ID, or its hidden <code>cardtridge-id</code> file was deleted. Link it again, and unlink the old ID from its game.</p>
+  </details>
+
+  <details>
+    <summary>Two of my cards launch the same game, but I only linked one.</summary>
+    <p>They share an ID, which happens when one card was copied (cloned) from the other. Format one of them, then link it again.</p>
+  </details>
+
+  <details>
+    <summary>My card says "Not installed" or the NFC pad turns red.</summary>
+    <p>The linked game was uninstalled, or it's on a drive that isn't plugged in. Install it, or plug the drive in, and pick <i>Rescan games</i> if it still isn't found.</p>
+  </details>
+
+  <details>
+    <summary>My phone can't reach the PC when I scan a code.</summary>
+    <ul>
+      <li>Put the phone on the same Wi-Fi as the PC, not mobile data or a guest network.</li>
+      <li>Run <i>Check address and port</i> in Settings, and allow Cardtridge through Windows Firewall on private networks.</li>
+      <li>If the PC's address changed, the printed codes point at the old one; give the PC a fixed address and reprint.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>A game started behind my other windows.</summary>
+    <p>Windows only lets the app you're using bring a window to the front. Cardtridge does this for GOG and Epic games once their window appears; Steam usually does it for its own games. Click the game in the taskbar if it doesn't come forward.</p>
+  </details>
+
+  <details>
+    <summary>Can I use a USB stick on a PC without Cardtridge?</summary>
+    <p>No. Windows no longer runs programs from USB drives automatically, so Cardtridge has to be running on the PC to notice the stick.</p>
+  </details>
+
+  <details>
+    <summary>Cardtridge says it's already running.</summary>
+    <p>Only one copy runs at a time. Look for its icon in the system tray; it may be under the arrow that shows hidden icons.</p>
+  </details>
+
+  <details>
+    <summary>Where does Cardtridge keep its files?</summary>
+    <ul>
+      <li>Settings, card links, print settings and uploaded art: <code>%APPDATA%\cardtridge</code></li>
+      <li>The log and cached game details: <code>%LOCALAPPDATA%\cardtridge</code></li>
+    </ul>
+  </details>
+</main>
+</body>
+</html>

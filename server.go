@@ -44,6 +44,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /cover/{appid}", s.art)
 	mux.HandleFunc("GET /art/{appid}/{kind}", s.art)
 	mux.HandleFunc("GET /settings", s.settingsPage)
+	mux.HandleFunc("GET /help", helpPage)
 	mux.HandleFunc("GET /print.js", servePrintJS)
 	mux.HandleFunc("GET /ping", s.ping)
 	mux.HandleFunc("POST /api/network/check", s.localAPI(s.checkNetwork))

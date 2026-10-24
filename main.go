@@ -178,6 +178,7 @@ func setupTray(app *application.App, cfg Config, launcher *Launcher, details *De
 
 	menu.Add("Open QR page").OnClick(func(*application.Context) { show("/") })
 	menu.Add("Settings…").OnClick(func(*application.Context) { show("/settings") })
+	menu.Add("Help").OnClick(func(*application.Context) { show("/help") })
 	menu.Add("Rescan games").OnClick(func(*application.Context) {
 		if err := launcher.Rescan(); err != nil {
 			log.Printf("rescan: %v", err)

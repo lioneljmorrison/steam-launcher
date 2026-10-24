@@ -20,6 +20,9 @@ import (
 //go:embed settings.html
 var settingsHTML string
 
+//go:embed help.html
+var helpHTML []byte
+
 var (
 	settingsTmpl = template.Must(template.New("settings").Parse(settingsHTML))
 	comPortRe    = regexp.MustCompile(`(?i)^COM\d+$`)
@@ -35,6 +38,12 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
 	if err := settingsTmpl.Execute(w, map[string]any{"Key": s.key}); err != nil {
 		log.Printf("render settings: %v", err)
 	}
+}
+
+func helpPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Write(helpHTML)
 }
 
 type portInfo struct {
