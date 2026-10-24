@@ -93,7 +93,7 @@
   .card .link button:hover { background: #c94b4b; color: #fff; }
   body.linking .card { cursor: pointer; outline: 3px solid transparent; transition: outline-color .15s; }
   body.linking .card:hover { outline-color: #e8a33d; }
-  .banner { display: none; position: sticky; top: 0; z-index: 1; margin: 0 0 20px; padding: 14px 18px; border-radius: 10px; background: #e8a33d; color: #1b2838; font-weight: 600; }
+  .banner { display: none; margin: 0 0 20px; padding: 14px 18px; border-radius: 10px; background: #e8a33d; color: #1b2838; font-weight: 600; }
   body.linking .banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
   .banner code { font-size: 15px; }
   button { font: inherit; border: 0; border-radius: 6px; padding: 4px 12px; cursor: pointer; background: #2a475e; color: #fff; }
@@ -157,14 +157,20 @@
   .print-bar .title { color: #fff; font-weight: 600; }
   .print-bar a { color: #66c0f4; }
   .print-bar button { padding: 8px 16px; margin-left: auto; }
+
+  /* The print bar and finder stick to the top once scrolled past, trimmed to
+     their buttons. Above the card tools (z-index 2), below the toast. */
+  .toolbar { position: sticky; top: 0; z-index: 3; margin: 0 -24px; padding: 0 24px; background: #1b2838; }
+  .toolbar.stuck { padding-top: 10px; padding-bottom: 10px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+  .toolbar.stuck .print-bar { margin-bottom: 8px; padding: 6px 10px; }
+  .toolbar.stuck .print-bar button { padding: 6px 14px; }
+  .toolbar.stuck .finder { margin-bottom: 0; }
+  .toolbar.stuck #print-summary, .toolbar.stuck .print-bar a, .toolbar.stuck .finder .muted { display: none; }
+  .toolbar.stuck .banner { margin-bottom: 8px; }
 </style>
 </head>
 <body>
 <div class="toast" id="toast" role="status"></div>
-<div class="banner" id="banner">
-  <span>New card <code id="pending-uid"></code> on the base — click a game to link it.</span>
-  <button id="cancel-link" title="Forget this card (Esc)">Cancel</button>
-</div>
 <header>
   <div>
     <h1>Cardtridge<span class="tm">™</span></h1>
@@ -179,6 +185,12 @@
     <button onclick="location.href='/settings'">Settings</button>
   </div>
 </header>
+<div class="toolbar-sentinel" id="toolbar-sentinel"></div>
+<div class="toolbar" id="toolbar">
+<div class="banner" id="banner">
+  <span>New card <code id="pending-uid"></code> on the base — click a game to link it.</span>
+  <button id="cancel-link" title="Forget this card (Esc)">Cancel</button>
+</div>
 <section class="print-bar" aria-label="Print settings">
   <span class="title">Print</span>
   <span id="print-summary"></span>
@@ -191,6 +203,7 @@
   <div class="letters" id="letters" role="group" aria-label="Jump to games starting with"></div>
   <span class="muted">Ctrl+click cards to select them for printing.</span>
 </section>
+</div>
 <div class="grid" id="grid"></div>
 <div class="empty" id="empty">No games match.</div>
 <dialog id="art-dlg" aria-labelledby="art-title">
@@ -393,13 +406,22 @@
       b.textContent = l;
       b.title = l === "#" ? "Games starting with a symbol" : `Games starting with ${l}`;
       b.setAttribute("aria-pressed", l === letter);
-      b.addEventListener("click", () => { letter = letter === l ? null : l; rearrange(applyFilter); });
+      b.addEventListener("click", () => { letter = letter === l ? null : l; toGridTop(); rearrange(applyFilter); });
       return b;
     }));
     const shown = new Set(base.filter(({ id }) => !letter || initial(id) === letter).map(({ id }) => id));
     for (const { id } of APPS) cardEls[id].classList.toggle("filtered", !shown.has(id));
     document.getElementById("empty").classList.toggle("show", !shown.size);
     try { localStorage.setItem("store", storeSel.value); } catch {}
+  }
+  // Once scrolled past, the toolbar sticks and slims down. A letter picked from
+  // it brings the grid's top back under it, before the cards are measured.
+  const toolbar = document.getElementById("toolbar");
+  new IntersectionObserver(([e]) => toolbar.classList.toggle("stuck", !e.isIntersecting))
+    .observe(document.getElementById("toolbar-sentinel"));
+  function toGridTop() {
+    if (!toolbar.classList.contains("stuck")) return;
+    scrollBy({ top: grid.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom - 16, behavior: "instant" });
   }
   storeSel.addEventListener("change", () => rearrange(applyFilter));
   search.addEventListener("input", () => rearrange(applyFilter));
