@@ -10,9 +10,10 @@
   body { font-family: system-ui, sans-serif; background: #1b2838; color: #c7d5e0; margin: 0; padding: 24px; }
   h1 { margin: 0; color: #fff; }
   h1 .tm { font-size: .45em; font-weight: 600; vertical-align: super; }
-  .grid { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .grid { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
   .card { position: relative; background: #fff; color: #111; border-radius: 10px; overflow: hidden; text-align: center; }
-  .card img.cover { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; display: block; background: #2a475e; }
+  .card img.cover { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; background: #2a475e; }
+  .card.wide-art img.cover { object-fit: contain; background: #0f1922; } /* only the store header was found */
   .card .name { font-weight: 600; padding: 10px 10px 2px; }
   /* The QR code stays hidden until the QR button shows it over the card. */
   /* Padded clear of the store badge and tool buttons, and scaled to fit the card. */
@@ -251,6 +252,25 @@
   const ICON_PRINT =`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="6" y="14" width="12" height="7"/></svg>`;
 
   const SELECT_TIP = "Ctrl+click (⌘+click on a Mac) to select for printing";
+  // The cover is the portrait library art, from the Steam client's cache or
+  // else Steam's CDN; failing that, the wide store header, letterboxed.
+  function showCover(card, id, store) {
+    const CDN = `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}`;
+    const steam = store === "steam";
+    const srcs = [`/art/${id}/capsule`, ...(steam ? [`${CDN}/library_600x900.jpg`] : [])];
+    const wide = [`/cover/${id}`, ...(steam ? [`${CDN}/header.jpg`] : [])];
+    const img = card.querySelector("img.cover");
+    const next = () => {
+      const portrait = srcs.length > 0;
+      const src = portrait ? srcs.shift() : wide.shift();
+      if (!src) return img.style.visibility = "hidden";
+      card.classList.toggle("wide-art", !portrait);
+      img.src = src;
+    };
+    img.addEventListener("error", next);
+    next();
+  }
+
   for (const { id, name, store } of APPS) {
     const url = `${BASE}/launch/${id}?k=${encodeURIComponent(KEY)}`;
     const qr = qrcode(0, "M");
@@ -259,10 +279,8 @@
     const card = document.createElement("div");
     card.className = "card";
     card.dataset.store = store;
-    const cdn = store === "steam" ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg` : "";
     card.innerHTML = `
-      <img class="cover" src="/cover/${id}" data-cdn="${cdn}"
-        onerror="if (this.dataset.cdn) { this.src = this.dataset.cdn; this.dataset.cdn = ''; } else this.style.visibility = 'hidden'">
+      <img class="cover" alt="">
       ${store === "gog" ? `<span class="store" title="GOG game: runs its exe directly">GOG</span>` : ""}
       ${store === "epic" ? `<span class="store epic" title="Epic game: starts through the Epic Games Launcher">EPIC</span>` : ""}
       <div class="tools">
@@ -279,6 +297,7 @@
       <div class="desc"></div>
       <div class="links"></div>`;
     card.querySelector(".name").textContent = name;
+    showCover(card, id, store);
     const d = DETAILS[id];
     if (d) {
       card.querySelector(".meta").textContent = [d.developer, d.year, (d.genres || []).slice(0, 2).join(", ")].filter(Boolean).join(" · ");
