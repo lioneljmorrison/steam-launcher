@@ -55,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/art/{appid}", s.localAPI(s.artCandidates))
 	mux.HandleFunc("GET /api/art/{appid}/screenshots", s.localAPI(s.artScreenshots))
 	mux.HandleFunc("POST /api/art/{appid}", s.localAPI(s.saveArt))
+	mux.HandleFunc("POST /api/art/{appid}/upload", s.localAPI(s.uploadArt))
 	mux.HandleFunc("POST /api/launch/{appid}", s.localAPI(s.launchLocal))
 	mux.HandleFunc("GET /api/settings", s.localAPI(s.getSettings))
 	mux.HandleFunc("POST /api/settings", s.localAPI(s.saveSettings))
@@ -110,7 +111,8 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 
 // art serves cached Steam artwork: /art/{appid}/{capsule|header|hero|logo}
 // (/cover/{appid} is the header), or one cached file the art picker listed:
-// /art/{appid}/file?f=<path>. GOG and Epic art redirects to their image CDNs.
+// /art/{appid}/file?f=<path>, or an uploaded image: /art/{appid}/upload?f=<name>.
+// GOG and Epic art redirects to their image CDNs.
 func (s *Server) art(w http.ResponseWriter, r *http.Request) {
 	if !isLoopback(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -122,6 +124,10 @@ func (s *Server) art(w http.ResponseWriter, r *http.Request) {
 	}
 	if kind == "file" {
 		serveCachedArt(w, r, appID)
+		return
+	}
+	if kind == "upload" {
+		serveUploadedArt(w, r, appID)
 		return
 	}
 	if isGOG(appID) || isEpic(appID) {

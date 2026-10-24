@@ -53,6 +53,12 @@
   .art-preview .pcard { position: absolute; inset: 0; }
   .art-preview img { -webkit-user-drag: none; }
   .art-side label { cursor: pointer; }
+  .art-zoom { display: flex; align-items: center; gap: 6px; }
+  .art-zoom button { width: 28px; padding: 4px 0; font-weight: 700; }
+  .art-zoom input { flex: 1; min-width: 0; accent-color: #66c0f4; }
+  .art-zoom output { width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+  .art-side .q { display: inline-block; padding: 0 6px; border-radius: 99px; font-weight: 700; color: #0f1922; }
+  #art-dlg.dropping { outline: 3px dashed #66c0f4; outline-offset: -10px; }
   .art-actions { display: flex; gap: 8px; margin-top: 16px; }
   .art-actions button { padding: 8px 16px; }
   .art-actions #art-save { background: #5c7e10; }
@@ -187,8 +193,17 @@
     <div class="art-list" id="art-list"></div>
     <div class="art-side">
       <div class="art-preview" id="art-preview" title="Drag the art to choose what stays in view when it's cropped to the card"></div>
-      <span class="muted">Side A as it prints on the chosen template. Drag the art to choose what stays in view.</span>
+      <span class="muted">Side A as it prints on the chosen template. Drag the art to choose what stays in view; zoom in to crop closer.</span>
+      <div class="art-zoom" role="group" aria-label="Zoom">
+        <button type="button" id="art-zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+        <input type="range" id="art-zoom" min="1" max="4" step="0.05" value="1" aria-label="Zoom">
+        <button type="button" id="art-zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+        <output id="art-zoom-val" for="art-zoom">1.0×</output>
+      </div>
+      <span id="art-dpi" class="muted"></span>
       <label><input type="checkbox" id="art-logo"> Game logo over the art</label>
+      <button type="button" id="art-upload" title="Use an image from this PC; you can also drop one on this window">Upload an image…</button>
+      <input type="file" id="art-file" accept="image/jpeg,image/png,image/webp" hidden>
     </div>
   </div>
   <div class="art-actions">
@@ -500,7 +515,9 @@
       if (choice) {
         const art = img("hero");
         if (await loadImg(art, choice.src)) {
-          art.style.objectPosition = choice.pos || "";
+          art.style.objectPosition = art.style.transformOrigin = choice.pos || "";
+          // Zoom scales from the point kept in view, so panning still runs edge to edge.
+          if (choice.zoom > 1) art.style.transform = `scale(${choice.zoom})`;
           if (choice.logo) await addLogo();
           return;
         }
@@ -521,6 +538,12 @@
     return t.rotate ? [h, w] : [w, h];
   }
 
+  // How sharp art prints at a dpi, as a badge.
+  function qualityBadge(dpi) {
+    const [q, word] = dpi >= 250 ? ["sharp", "Sharp"] : dpi >= 150 ? ["ok", "OK"] : ["soft", "Blurry"];
+    return `<span class="q ${q}">${word}</span>`;
+  }
+
   // The art picker: every image the game has, with how sharp it prints at the
   // template's card size (cropped to fill it), and a preview of side A.
   const artDlg = $("art-dlg");
@@ -535,10 +558,10 @@
     list.replaceChildren(div("note", "Loading images…"));
     artDlg.showModal();
     showPreview();
-    const seen = new Set();
-    const add = ({ src, label }) => {
-      if (seen.has(src)) return;
-      seen.add(src);
+    const seen = new Map(); // src → its button
+    // add lists an image, first after the note or else last, and gives its button.
+    const add = ({ src, label }, first) => {
+      if (seen.has(src)) return seen.get(src);
       const b = document.createElement("button");
       b.type = "button";
       b.dataset.src = src;
@@ -548,21 +571,21 @@
       b.append(im, div("", label), res);
       im.onload = () => {
         const dpi = Math.round(Math.min(im.naturalWidth / cw, im.naturalHeight / ch));
-        const [q, word] = dpi >= 250 ? ["sharp", "Sharp"] : dpi >= 150 ? ["ok", "OK"] : ["soft", "Blurry"];
-        res.innerHTML = `${im.naturalWidth} × ${im.naturalHeight} · <span class="q ${q}">${word}</span>`;
+        res.innerHTML = `${im.naturalWidth} × ${im.naturalHeight} · ${qualityBadge(dpi)}`;
         res.title = `About ${dpi} dpi on this card`;
         b.hidden = false;
       };
       im.onerror = () => b.remove();
       im.src = src;
       b.setAttribute("aria-pressed", picking.choice?.src === src);
-      b.addEventListener("click", () => {
-        picking.choice = { src, pos: "", logo: $("art-logo").checked };
-        for (const o of list.querySelectorAll("button")) o.setAttribute("aria-pressed", o === b);
-        showPreview();
-      });
-      list.append(b);
+      b.addEventListener("click", () => choose(src, $("art-logo").checked));
+      seen.set(src, b);
+      const note = list.querySelector(".note");
+      if (first && note) note.after(b);
+      else list.append(b);
+      return b;
     };
+    picking.add = add;
     const get = async path => {
       try {
         const res = await fetch(path, { headers: { "X-Key": KEY } });
@@ -571,7 +594,8 @@
     };
     const candidates = await get(`/api/art/${id}`);
     if (picking?.id !== id) return;
-    list.replaceChildren(div("note", "Pick the art for side A. The badge is how sharp it prints filling this card: Sharp is 250 dpi or more, OK is 150 to 250, Blurry is under 150. Hover a badge for its dpi."));
+    seen.clear();
+    list.replaceChildren(div("note", "Pick the art for side A, or upload your own. The badge is how sharp it prints filling this card: Sharp is 250 dpi or more, OK is 150 to 250, Blurry is under 150. Hover a badge for its dpi."));
     if (picking.choice) add({ src: picking.choice.src, label: "Current choice" });
     candidates.forEach(add);
     if (el.dataset.store === "steam") {
@@ -580,12 +604,91 @@
     }
   }
 
-  function showPreview() {
-    const box = $("art-preview");
-    $("art-logo").checked = !!picking.choice?.logo;
-    box.replaceChildren(artCard(picking.id, cardEls[picking.id], {}, [], picking.choice));
-    box.classList.toggle("movable", !!picking);
+  // choose makes an image the choice, filling the card from its middle.
+  function choose(src, logo) {
+    picking.choice = { src, pos: "", logo };
+    for (const o of $("art-list").querySelectorAll("button")) o.setAttribute("aria-pressed", o.dataset.src === src);
+    showPreview();
   }
+
+  function showPreview() {
+    const box = $("art-preview"), waits = [];
+    $("art-logo").checked = !!picking.choice?.logo;
+    box.replaceChildren(artCard(picking.id, cardEls[picking.id], {}, waits, picking.choice));
+    box.classList.toggle("movable", !!picking);
+    showZoom();
+    const id = picking.id;
+    Promise.all(waits).then(() => { if (picking?.id === id) showZoom(); });
+  }
+
+  // showZoom shows the zoom and how sharp the art prints at it: zooming in
+  // spreads fewer of the image's pixels over the card.
+  function showZoom() {
+    const zoom = picking.choice?.zoom || 1;
+    $("art-zoom").value = zoom;
+    $("art-zoom-val").textContent = `${zoom.toFixed(1)}×`;
+    const art = $("art-preview").querySelector("img.hero"), [cw, ch] = cardInches();
+    if (!art?.naturalWidth) return $("art-dpi").textContent = "";
+    const dpi = Math.round(Math.min(art.naturalWidth / cw, art.naturalHeight / ch) / zoom);
+    $("art-dpi").innerHTML = `Prints at about ${dpi} dpi · ${qualityBadge(dpi)}`;
+  }
+
+  function setZoom(zoom) {
+    if (!picking || !adoptShown()) return;
+    zoom = Math.min(4, Math.max(1, Math.round(zoom * 100) / 100));
+    if (zoom > 1) picking.choice.zoom = zoom;
+    else delete picking.choice.zoom;
+    const art = $("art-preview").querySelector("img.hero");
+    if (art) art.style.transform = zoom > 1 ? `scale(${zoom})` : "";
+    showZoom();
+  }
+  $("art-zoom").addEventListener("input", e => setZoom(+e.target.value));
+  $("art-zoom-in").addEventListener("click", () => setZoom((picking?.choice?.zoom || 1) + 0.25));
+  $("art-zoom-out").addEventListener("click", () => setZoom((picking?.choice?.zoom || 1) - 0.25));
+  $("art-preview").addEventListener("wheel", e => {
+    if (!picking) return;
+    e.preventDefault();
+    setZoom((picking.choice?.zoom || 1) * Math.exp(-e.deltaY * 0.002));
+  }, { passive: false });
+
+  // Uploads are stored on this PC, listed first and chosen with the logo
+  // over them, since bare art is usually what gets uploaded.
+  async function uploadArt(file) {
+    if (!picking || !file) return;
+    const id = picking.id;
+    try {
+      const res = await fetch(`/api/art/${id}/upload`, {
+        method: "POST",
+        headers: { "X-Key": KEY, "Content-Type": "application/octet-stream" },
+        body: file,
+      });
+      if (!res.ok) throw new Error((await res.text()).trim());
+      const c = await res.json();
+      if (picking?.id !== id) return;
+      picking.add(c, true);
+      choose(c.src, true);
+    } catch (err) {
+      toast(`Couldn't upload the image: ${err.message}`, true);
+    }
+  }
+  $("art-upload").addEventListener("click", () => $("art-file").click());
+  $("art-file").addEventListener("change", e => {
+    uploadArt(e.target.files[0]);
+    e.target.value = "";
+  });
+  const hasFiles = e => e.dataTransfer?.types.includes("Files");
+  artDlg.addEventListener("dragover", e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    artDlg.classList.add("dropping");
+  });
+  artDlg.addEventListener("dragleave", e => { if (!artDlg.contains(e.relatedTarget)) artDlg.classList.remove("dropping"); });
+  artDlg.addEventListener("drop", e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    artDlg.classList.remove("dropping");
+    uploadArt(e.dataTransfer.files[0]);
+  });
 
   // On automatic art, the art the preview shows becomes the choice when it's
   // moved or given a logo, kept as it looks now. False while it's loading.
@@ -607,7 +710,7 @@
     const art = e.currentTarget.querySelector("img.hero");
     if (!picking || !adoptShown()) return;
     const box = e.currentTarget.getBoundingClientRect();
-    const scale = Math.max(box.width / art.naturalWidth, box.height / art.naturalHeight);
+    const scale = Math.max(box.width / art.naturalWidth, box.height / art.naturalHeight) * (picking.choice.zoom || 1);
     const [x, y] = (picking.choice.pos || "50% 50%").split(" ").map(parseFloat);
     drag = {
       art, x, y, startX: e.clientX, startY: e.clientY,
@@ -623,7 +726,7 @@
     const pan = (start, delta, over) => over < 1 ? start : Math.min(100, Math.max(0, start - delta / over * 100));
     const x = pan(drag.x, e.clientX - drag.startX, drag.overX), y = pan(drag.y, e.clientY - drag.startY, drag.overY);
     picking.choice.pos = `${Math.round(x * 10) / 10}% ${Math.round(y * 10) / 10}%`;
-    drag.art.style.objectPosition = picking.choice.pos;
+    drag.art.style.objectPosition = drag.art.style.transformOrigin = picking.choice.pos;
   });
   const endDrag = e => {
     drag = null;
@@ -657,7 +760,7 @@
   $("art-save").addEventListener("click", () => saveArt(picking.choice));
   $("art-auto").addEventListener("click", () => saveArt(null));
   $("art-cancel").addEventListener("click", () => artDlg.close());
-  artDlg.addEventListener("close", () => { picking = null; });
+  artDlg.addEventListener("close", () => { picking = null; artDlg.classList.remove("dropping"); });
 
   // Side B: name, developer and publisher, year and genres, the store's
   // popular user tags, description and optional QR.
