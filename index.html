@@ -22,6 +22,35 @@
   .card .tools { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; gap: 6px; }
   .card .tools button { width: 32px; height: 32px; padding: 6px; border-radius: 99px; background: rgba(15,25,34,.75); display: grid; place-items: center; }
   .card .tools button:hover, .card.show-qr .tools .show-qr { background: #3d6c8d; }
+  .card.custom-art .tools .pick-art { background: #66c0f4; color: #0f1922; }
+
+  /* Art picker for the printed side A. */
+  #art-dlg { width: min(960px, calc(100vw - 32px)); max-height: calc(100vh - 32px); box-sizing: border-box; padding: 20px; border: 0; border-radius: 12px; background: #1b2838; color: #c7d5e0; }
+  #art-dlg::backdrop { background: rgba(0,0,0,.6); }
+  #art-dlg h2 { margin: 0 0 14px; color: #fff; font-size: 18px; }
+  .art-body { display: flex; gap: 20px; align-items: flex-start; }
+  .art-list { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; max-height: calc(100vh - 200px); overflow: auto; padding: 4px; }
+  .art-list button { display: flex; flex-direction: column; gap: 4px; padding: 6px; background: #0f1922; border: 2px solid transparent; text-align: left; font-size: 11px; line-height: 1.3; }
+  .art-list button[hidden] { display: none; }
+  .art-list button:hover { background: #2a475e; }
+  .art-list button[aria-pressed="true"] { border-color: #66c0f4; }
+  .art-list img { width: 100%; height: 120px; object-fit: contain; background: #000; border-radius: 4px; }
+  .art-list .res { opacity: .75; }
+  .art-list .q { display: inline-block; padding: 0 6px; border-radius: 99px; font-weight: 700; color: #0f1922; }
+  .q.sharp { background: #75b022; } .q.ok { background: #e8a33d; } .q.soft { background: #c94b4b; color: #fff; }
+  .art-list .note { grid-column: 1 / -1; opacity: .7; font-size: 13px; }
+  .art-side { flex: none; width: 220px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+  .art-preview { position: relative; width: 220px; overflow: hidden; border-radius: 8px; background: #111; touch-action: none; user-select: none; }
+  .art-preview.movable { cursor: grab; }
+  .art-preview.dragging { cursor: grabbing; }
+  .art-preview .pcard { position: absolute; inset: 0; }
+  .art-preview img { -webkit-user-drag: none; }
+  .art-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .art-actions button { padding: 8px 16px; }
+  .art-actions #art-save { background: #5c7e10; }
+  .art-actions #art-save:hover { background: #75b022; }
+  .art-actions .spacer { flex: 1; }
+  @media (max-width: 640px) { .art-body { flex-direction: column-reverse; } .art-side { width: 100%; } }
   .card .tools svg { width: 18px; height: 18px; }
   .card .tools .play { background: #5c7e10; }
   .card .tools .play:hover { background: #75b022; }
@@ -154,6 +183,23 @@
 </section>
 <div class="grid" id="grid"></div>
 <div class="empty" id="empty">No games match.</div>
+<dialog id="art-dlg" aria-labelledby="art-title">
+  <h2 id="art-title">Print art for <span id="art-name"></span></h2>
+  <div class="art-body">
+    <div class="art-list" id="art-list"></div>
+    <div class="art-side">
+      <div class="art-preview" id="art-preview" title="Drag the art to choose what stays in view when it's cropped to the card"></div>
+      <span class="muted">Side A as it prints on the chosen template. Drag the art to choose what stays in view.</span>
+      <label><input type="checkbox" id="art-logo"> Game logo over the art</label>
+    </div>
+  </div>
+  <div class="art-actions">
+    <button type="button" id="art-auto" title="Let the app choose the art again">Use automatic art</button>
+    <span class="spacer"></span>
+    <button type="button" id="art-cancel">Cancel</button>
+    <button type="button" id="art-save">Save</button>
+  </div>
+</dialog>
 <div id="print-root"></div>
 <style id="page-style"></style>
 <script>
@@ -162,12 +208,14 @@
   const KEY = {{.Key}};
   const NFC = {{.NFC}};
   const DETAILS = {{.Details}};
+  let ART = {{.Art}}; // art picked for side A, by appid
   const grid = document.getElementById("grid");
   const cardEls = {};
   let pending = null;
   const ICON_QR = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20v.01M17 20h4v-3"/></svg>`;
   const ICON_PLAY = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>`;
-  const ICON_PRINT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="6" y="14" width="12" height="7"/></svg>`;
+  const ICON_IMAGE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>`;
+  const ICON_PRINT =`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="6" y="14" width="12" height="7"/></svg>`;
 
   for (const { id, name, store } of APPS) {
     const url = `${BASE}/launch/${id}?k=${encodeURIComponent(KEY)}`;
@@ -186,6 +234,7 @@
       <div class="tools">
         <button class="play" title="Play on this PC" aria-label="Play on this PC">${ICON_PLAY}</button>
         <button class="show-qr" title="Show QR code" aria-label="Show QR code">${ICON_QR}</button>
+        <button class="pick-art" title="Choose the printed art" aria-label="Choose the printed art">${ICON_IMAGE}</button>
         <button class="print-one" title="Print this card" aria-label="Print this card">${ICON_PRINT}</button>
       </div>
       <div class="qr" title="Click to hide">${qr.createSvgTag({ scalable: true, margin: 2 })}</div>
@@ -211,6 +260,11 @@
     card.querySelector(".play").addEventListener("click", e => {
       e.stopPropagation();
       play(id, e.currentTarget);
+    });
+    card.classList.toggle("custom-art", !!ART[id]);
+    card.querySelector(".pick-art").addEventListener("click", e => {
+      e.stopPropagation();
+      pickArt(id);
     });
     card.querySelector(".print-one").addEventListener("click", e => {
       e.stopPropagation();
@@ -366,6 +420,7 @@
     }
   }
   document.addEventListener("keydown", e => {
+    if (artDlg.open) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();
       search.focus();
@@ -453,29 +508,167 @@
     return el;
   }
 
-  // Side A: the portrait library art. Without it, the hero art with the logo
-  // over it, then the header art; the name when there's no logo.
-  function artCard(id, el, opts, waits) {
+  // Side A: the art picked for the game, or else the portrait library art.
+  // Without that, the hero art with the logo over it, then the header art;
+  // the name when there's no logo.
+  function artCard(id, el, opts, waits, choice = ART[id]) {
     const pc = div("pcard art");
-    const art = document.createElement("img");
-    art.className = "hero";
-    pc.append(art);
+    const img = cls => pc.appendChild(Object.assign(document.createElement("img"), { className: cls }));
     // Steam art falls back to Steam's CDN; GOG art only comes via /art (a redirect to GOG's CDN).
     const CDN = `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}`;
     const cdn = (...files) => el.dataset.store === "steam" ? files.map(f => `${CDN}/${f}`) : [];
+    const addLogo = async () => {
+      if (!await loadImg(img("logo"), `/art/${id}/logo`, ...cdn("logo.png"))) pc.append(div("title", el.querySelector(".name").textContent));
+    };
     waits.push((async () => {
-      if (await loadImg(art, `/art/${id}/capsule`, ...cdn("library_600x900_2x.jpg", "library_600x900.jpg"))) return;
-      const hero = document.createElement("img");
-      hero.className = "hero";
-      pc.append(hero);
-      if (!await loadImg(hero, `/art/${id}/hero`, ...cdn("library_hero.jpg"), `/art/${id}/header`, el.querySelector("img.cover").currentSrc)) return;
-      const logo = document.createElement("img");
-      logo.className = "logo";
-      pc.append(logo);
-      if (!await loadImg(logo, `/art/${id}/logo`, ...cdn("logo.png"))) pc.append(div("title", el.querySelector(".name").textContent));
+      if (choice) {
+        const art = img("hero");
+        if (await loadImg(art, choice.src)) {
+          art.style.objectPosition = choice.pos || "";
+          if (choice.logo) await addLogo();
+          return;
+        }
+      }
+      // The CDN's 600 × 900 art comes first: the client usually caches only 300 × 450, which prints soft.
+      if (await loadImg(img("hero"), ...cdn("library_600x900_2x.jpg"), `/art/${id}/capsule`, ...cdn("library_600x900.jpg"))) return;
+      if (!await loadImg(img("hero"), `/art/${id}/hero`, ...cdn("library_hero.jpg"), `/art/${id}/header`, el.querySelector("img.cover").currentSrc)) return;
+      await addLogo();
     })());
     return pc;
   }
+
+  // The card's portrait size in inches on the chosen template; turned cards
+  // swap the cell's sides.
+  function cardInches() {
+    const t = TEMPLATES[$("template").value];
+    const [w, h] = t.card.map(s => parseFloat(s) / (s.endsWith("mm") ? 25.4 : 1));
+    return t.rotate ? [h, w] : [w, h];
+  }
+
+  // The art picker: every image the game has, with how sharp it prints at the
+  // template's card size (cropped to fill it), and a preview of side A.
+  const artDlg = $("art-dlg");
+  let picking = null; // { id, choice } while the picker is open
+  async function pickArt(id) {
+    const el = cardEls[id];
+    picking = { id, choice: ART[id] ? { ...ART[id] } : null };
+    $("art-name").textContent = el.querySelector(".name").textContent;
+    const [cw, ch] = cardInches();
+    $("art-preview").style.aspectRatio = `${cw} / ${ch}`;
+    const list = $("art-list");
+    list.replaceChildren(div("note", "Loading images…"));
+    artDlg.showModal();
+    showPreview();
+    const seen = new Set();
+    const add = ({ src, label }) => {
+      if (seen.has(src)) return;
+      seen.add(src);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.src = src;
+      b.hidden = true; // until the image loads
+      const im = document.createElement("img");
+      const res = div("res");
+      b.append(im, div("", label), res);
+      im.onload = () => {
+        const dpi = Math.round(Math.min(im.naturalWidth / cw, im.naturalHeight / ch));
+        const [q, word] = dpi >= 250 ? ["sharp", "Sharp"] : dpi >= 150 ? ["ok", "OK"] : ["soft", "Blurry"];
+        res.innerHTML = `${im.naturalWidth} × ${im.naturalHeight} · <span class="q ${q}">${word}</span>`;
+        res.title = `About ${dpi} dpi on this card`;
+        b.hidden = false;
+      };
+      im.onerror = () => b.remove();
+      im.src = src;
+      b.setAttribute("aria-pressed", picking.choice?.src === src);
+      b.addEventListener("click", () => {
+        picking.choice = { src, pos: "", logo: $("art-logo").checked };
+        for (const o of list.querySelectorAll("button")) o.setAttribute("aria-pressed", o === b);
+        showPreview();
+      });
+      list.append(b);
+    };
+    const get = async path => {
+      try {
+        const res = await fetch(path, { headers: { "X-Key": KEY } });
+        return res.ok ? await res.json() : [];
+      } catch { return []; }
+    };
+    const candidates = await get(`/api/art/${id}`);
+    if (picking?.id !== id) return;
+    list.replaceChildren(div("note", "Pick the art for side A. The badge is how sharp it prints filling this card: Sharp is 250 dpi or more, OK is 150 to 250, Blurry is under 150. Hover a badge for its dpi."));
+    if (picking.choice) add({ src: picking.choice.src, label: "Current choice" });
+    candidates.forEach(add);
+    if (el.dataset.store === "steam") {
+      const shots = await get(`/api/art/${id}/screenshots`);
+      if (picking?.id === id) shots.forEach(add);
+    }
+  }
+
+  function showPreview() {
+    const box = $("art-preview");
+    $("art-logo").checked = !!picking.choice?.logo;
+    $("art-logo").disabled = !picking.choice;
+    box.replaceChildren(artCard(picking.id, cardEls[picking.id], {}, [], picking.choice));
+    box.classList.toggle("movable", !!picking.choice);
+  }
+
+  // Dragging the preview pans the picked art inside the card. The art is
+  // cropped to fill it, so it moves only along the side that overflows, by
+  // object-position: 0% shows one edge of the image, 100% the other.
+  let drag = null;
+  $("art-preview").addEventListener("pointerdown", e => {
+    const art = e.currentTarget.querySelector("img.hero");
+    if (!picking?.choice || !art?.naturalWidth) return;
+    const box = e.currentTarget.getBoundingClientRect();
+    const scale = Math.max(box.width / art.naturalWidth, box.height / art.naturalHeight);
+    const [x, y] = (picking.choice.pos || "50% 50%").split(" ").map(parseFloat);
+    drag = {
+      art, x, y, startX: e.clientX, startY: e.clientY,
+      // How far the image overflows the card on each side, in screen pixels.
+      overX: art.naturalWidth * scale - box.width, overY: art.naturalHeight * scale - box.height,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.classList.add("dragging");
+    e.preventDefault();
+  });
+  $("art-preview").addEventListener("pointermove", e => {
+    if (!drag) return;
+    const pan = (start, delta, over) => over < 1 ? start : Math.min(100, Math.max(0, start - delta / over * 100));
+    const x = pan(drag.x, e.clientX - drag.startX, drag.overX), y = pan(drag.y, e.clientY - drag.startY, drag.overY);
+    picking.choice.pos = `${Math.round(x * 10) / 10}% ${Math.round(y * 10) / 10}%`;
+    drag.art.style.objectPosition = picking.choice.pos;
+  });
+  const endDrag = e => {
+    drag = null;
+    e.currentTarget.classList.remove("dragging");
+  };
+  $("art-preview").addEventListener("pointerup", endDrag);
+  $("art-preview").addEventListener("pointercancel", endDrag);
+  $("art-logo").addEventListener("change", () => {
+    if (picking.choice) picking.choice.logo = $("art-logo").checked;
+    showPreview();
+  });
+  async function saveArt(choice) {
+    const id = picking.id;
+    try {
+      const res = await fetch(`/api/art/${id}`, {
+        method: "POST",
+        headers: { "X-Key": KEY, "Content-Type": "application/json" },
+        body: JSON.stringify(choice || {}),
+      });
+      if (!res.ok) throw new Error((await res.text()).trim());
+      ART = await res.json();
+      cardEls[id].classList.toggle("custom-art", !!ART[id]);
+      artDlg.close();
+      toast(choice ? "Saved the print art." : "Back to automatic art.");
+    } catch (err) {
+      toast(`Couldn't save the art: ${err.message}`, true);
+    }
+  }
+  $("art-save").addEventListener("click", () => saveArt(picking.choice));
+  $("art-auto").addEventListener("click", () => saveArt(null));
+  $("art-cancel").addEventListener("click", () => artDlg.close());
+  artDlg.addEventListener("close", () => { picking = null; });
 
   // Side B: name, developer and publisher, year and genres, the store's
   // popular user tags, description and optional QR.
@@ -584,7 +777,7 @@
 
   // Esc does one thing: cancel linking, else clear the search, else clear the selection.
   document.addEventListener("keydown", e => {
-    if (e.key !== "Escape") return;
+    if (e.key !== "Escape" || artDlg.open) return; // the dialog closes itself
     if (pending) api("cancel", {});
     else if (document.activeElement === search && search.value) { search.value = ""; rearrange(applyFilter); }
     else if (selected.size) clearSelection();

@@ -25,13 +25,14 @@ var (
 )
 
 type Server struct {
-	launcher *Launcher
-	key      string
-	base     string
-	nfc      *NFCManager // nil when the NFC base is disabled
-	details  *DetailsStore
-	cfg      Config
-	quit     func() // exits the app (after a relaunch or update has started)
+	launcher   *Launcher
+	key        string
+	base       string
+	nfc        *NFCManager // nil when the NFC base is disabled
+	details    *DetailsStore
+	artChoices *ArtChoices // the art picked for printing, per game
+	cfg        Config
+	quit       func() // exits the app (after a relaunch or update has started)
 }
 
 func (s *Server) Handler() http.Handler {
@@ -41,6 +42,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /cover/{appid}", s.art)
 	mux.HandleFunc("GET /art/{appid}/{kind}", s.art)
 	mux.HandleFunc("GET /settings", s.settingsPage)
+	mux.HandleFunc("GET /api/art/{appid}", s.localAPI(s.artCandidates))
+	mux.HandleFunc("GET /api/art/{appid}/screenshots", s.localAPI(s.artScreenshots))
+	mux.HandleFunc("POST /api/art/{appid}", s.localAPI(s.saveArt))
 	mux.HandleFunc("POST /api/launch/{appid}", s.localAPI(s.launchLocal))
 	mux.HandleFunc("GET /api/settings", s.localAPI(s.getSettings))
 	mux.HandleFunc("POST /api/settings", s.localAPI(s.saveSettings))
@@ -86,6 +90,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		"Base":    s.base,
 		"Key":     s.key,
 		"NFC":     s.nfc != nil,
+		"Art":     s.artChoices.All(),
 	})
 	if err != nil {
 		log.Printf("render index: %v", err)
@@ -93,7 +98,8 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 }
 
 // art serves cached Steam artwork: /art/{appid}/{capsule|header|hero|logo}
-// (/cover/{appid} is the header). GOG and Epic art redirects to their image CDNs.
+// (/cover/{appid} is the header), or one cached file the art picker listed:
+// /art/{appid}/file?f=<path>. GOG and Epic art redirects to their image CDNs.
 func (s *Server) art(w http.ResponseWriter, r *http.Request) {
 	if !isLoopback(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -102,6 +108,10 @@ func (s *Server) art(w http.ResponseWriter, r *http.Request) {
 	appID, kind := r.PathValue("appid"), r.PathValue("kind")
 	if kind == "" {
 		kind = "header"
+	}
+	if kind == "file" {
+		serveCachedArt(w, r, appID)
+		return
 	}
 	if isGOG(appID) || isEpic(appID) {
 		if d := s.details.Get(appID); d != nil && d.Art[kind] != "" {

@@ -99,7 +99,7 @@ func sortApps(apps []App) {
 
 // artFiles maps an artwork kind to the file names the Steam client caches it as.
 var artFiles = map[string][]string{
-	"capsule": {"library_600x900_2x.jpg", "library_600x900.jpg"}, // portrait library art
+	"capsule": {"library_600x900_2x.jpg", "library_600x900.jpg", "library_capsule.jpg"}, // portrait library art
 	"header":  {"library_header.jpg", "header.jpg"},
 	"hero":    {"library_hero.jpg"},
 	"logo":    {"logo.png"},
