@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cardtridge</title>
+<title>Cardtridge™</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="/print.js"></script>
 <style>
   body { font-family: system-ui, sans-serif; background: #1b2838; color: #c7d5e0; margin: 0; padding: 24px; }
-  h1 { margin: 0 0 4px; color: #fff; }
-  p.sub { margin: 0 0 24px; opacity: .7; font-size: 14px; }
+  h1 { margin: 0; color: #fff; }
+  h1 .tm { font-size: .45em; font-weight: 600; vertical-align: super; }
   .grid { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
   .card { position: relative; background: #fff; color: #111; border-radius: 10px; overflow: hidden; text-align: center; }
   .card img.cover { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; display: block; background: #2a475e; }
@@ -86,7 +86,7 @@
   button { font: inherit; border: 0; border-radius: 6px; padding: 4px 12px; cursor: pointer; background: #2a475e; color: #fff; }
   button:hover { background: #3d6c8d; }
   .muted { opacity: .7; }
-  header { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; }
+  header { display: flex; gap: 16px; align-items: center; justify-content: space-between; margin: 0 0 24px; }
   .header-actions { display: flex; gap: 8px; flex: none; }
   header button { padding: 8px 16px; }
 
@@ -154,8 +154,7 @@
 </div>
 <header>
   <div>
-    <h1>Cardtridge</h1>
-    <p class="sub">Scan with your phone camera on the same Wi-Fi, or with a scanner on this PC. Codes point at {{.Base}}</p>
+    <h1>Cardtridge<span class="tm">™</span></h1>
   </div>
   <div class="header-actions">
     <select id="store" aria-label="Show games from" title="Show games from">

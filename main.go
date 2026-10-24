@@ -22,8 +22,10 @@ import (
 
 const (
 	appName = "Cardtridge"
-	runKey  = `Software\Microsoft\Windows\CurrentVersion\Run`
-	runName = "Cardtridge"
+	// productName is the name people see, with its trademark sign.
+	productName = "Cardtridge™"
+	runKey      = `Software\Microsoft\Windows\CurrentVersion\Run`
+	runName     = "Cardtridge"
 	// The app was called Steam QR Launcher, in steam-launcher folders.
 	oldRunName = "SteamQRLauncher"
 	oldDirName = "steam-launcher"
@@ -43,7 +45,7 @@ func main() {
 	for _, mutex := range []string{`Local\Cardtridge`, `Local\SteamQRLauncher`} {
 		name, _ := windows.UTF16PtrFromString(mutex)
 		if _, err := windows.CreateMutex(nil, false, name); errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-			fatal(appName + " is already running. Look for it in the system tray.")
+			fatal(productName + " is already running. Look for it in the system tray.")
 		}
 	}
 	moveOldStartup()
@@ -95,7 +97,7 @@ func main() {
 	pageURL := fmt.Sprintf("http://localhost:%d", cfg.Port)
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
-		Title:            appName,
+		Title:            productName,
 		Width:            1280,
 		Height:           900,
 		MinWidth:         640,
@@ -145,7 +147,7 @@ func onMain(fn func()) { application.InvokeAsync(fn) }
 func setupTray(app *application.App, cfg Config, launcher *Launcher, details *DetailsStore, nfc *NFCManager, show func(path string)) {
 	tray := app.SystemTray.New()
 	tray.SetIcon(trayIcon())
-	tray.SetTooltip(appName)
+	tray.SetTooltip(productName)
 	tray.OnClick(func() { show("/") })
 	menu := app.NewMenu()
 	// The NFC and scanner watchers update their menu items through onMain,
@@ -333,7 +335,7 @@ const idYes = 6
 
 func messageBox(msg string, flags uint32) int32 {
 	text, _ := windows.UTF16PtrFromString(msg)
-	caption, _ := windows.UTF16PtrFromString(appName)
+	caption, _ := windows.UTF16PtrFromString(productName)
 	ret, _ := windows.MessageBox(0, text, caption, flags|windows.MB_SETFOREGROUND)
 	return ret
 }

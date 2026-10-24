@@ -239,7 +239,7 @@ func (s *Server) ping(w http.ResponseWriter, r *http.Request) {
 	case local:
 		result(w, http.StatusOK, "That was this PC", "Opened on the PC itself, this doesn't test the network. Scan the code with your phone.")
 	default:
-		result(w, http.StatusOK, "Connected", appName+" can be reached from this device. You can close this page.")
+		result(w, http.StatusOK, "Connected", productName+" can be reached from this device. You can close this page.")
 	}
 }
 
