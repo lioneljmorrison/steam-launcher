@@ -10,7 +10,7 @@
   body { font-family: system-ui, sans-serif; background: #1b2838; color: #c7d5e0; margin: 0; padding: 24px; }
   h1 { margin: 0; color: #fff; }
   h1 .tm { font-size: .45em; font-weight: 600; vertical-align: super; }
-  .grid { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+  .grid { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card, 180px), 1fr)); gap: 16px; }
   .card { position: relative; background: #fff; color: #111; border-radius: 10px; overflow: hidden; text-align: center; }
   .card img.cover { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; display: block; background: #2a475e; }
   .card.wide-art img.cover { object-fit: contain; background: #0f1922; } /* only the store header was found */
@@ -21,6 +21,7 @@
   .card.show-qr .qr { display: flex; }
   .card .qr svg { width: auto; height: 100%; max-width: 100%; max-height: 180px; aspect-ratio: 1; display: block; }
   .card.show-qr .store { display: none; }
+  .card:has(.tools:is(:hover, :focus-within)) .store { opacity: 0; } /* small cards: the open pill reaches it */
   /* The tools are one pill, like YouTube's volume control: just Play until
      it's hovered or focused, when the other buttons slide out to its left.
      It stays open while the QR code shows, so its button can close it. */
@@ -162,6 +163,11 @@
   .nav .count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 99px; background: #66c0f4; color: #0f1922; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; }
   .nav select { flex: none; height: 36px; padding: 0 10px 0 14px; font: inherit; font-size: 14px; border: 0; border-radius: 99px; background: #2a475e; color: #fff; cursor: pointer; }
   .nav select:hover { background: #3d6c8d; }
+  .zoom { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 6px; color: #8fa9bd; }
+  .zoom svg { width: 14px; height: 14px; flex: none; }
+  .zoom svg + input + svg { width: 20px; height: 20px; }
+  .zoom input { width: 90px; margin: 0; accent-color: #66c0f4; cursor: pointer; }
+  @media (max-width: 640px) { .zoom { display: none; } }
   .letters { flex: 1; min-width: 0; display: flex; gap: 2px; padding: 0 10px; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent); }
   .letters::-webkit-scrollbar { display: none; }
   .letters button { flex: none; min-width: 32px; height: 32px; padding: 0 6px; border-radius: 99px; background: transparent; }
@@ -197,6 +203,7 @@
     <option value="gog">GOG</option>
     <option value="epic">Epic</option>
   </select>
+  <label class="zoom" title="Card size"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/></svg><input type="range" id="zoom" min="160" max="320" step="10" value="180" aria-label="Card size"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/></svg></label>
   <button class="icon" id="clear-selection" title="Clear the selection (Esc)" aria-label="Clear the selection"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   <button class="icon" id="print"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="6" y="14" width="12" height="7"/></svg><span class="count"></span></button>
   <a class="icon" href="/settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
@@ -448,6 +455,14 @@
     scrollBy({ top: grid.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom - 16, behavior: "instant" });
   }
   storeSel.addEventListener("change", () => rearrange(applyFilter));
+
+  // Card size, remembered in this browser.
+  const zoom = document.getElementById("zoom");
+  const setCardSize = () => grid.style.setProperty("--card", `${zoom.value}px`);
+  try { if (+localStorage.getItem("cardSize")) zoom.value = localStorage.getItem("cardSize"); } catch {}
+  setCardSize();
+  zoom.addEventListener("input", setCardSize);
+  zoom.addEventListener("change", () => { try { localStorage.setItem("cardSize", zoom.value); } catch {} });
   search.addEventListener("input", () => rearrange(applyFilter));
 
   // Animates a filter change, Isotope style: cards that stay slide to their new
